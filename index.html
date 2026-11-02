@@ -137,6 +137,12 @@ h1{font-family:"Bagel Fat One","Arial Black",sans-serif;font-weight:400;font-siz
 .mutlist{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px}
 .mutlist span{border:1px solid var(--line);border-radius:99px;padding:3px 10px;font-size:13px;background:var(--surface2)}
 .mutlist span.no{color:var(--muted);border-style:dashed;background:transparent}
+.qmark{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--line);color:var(--muted);font-weight:700;font-size:16px}
+.hlist{display:grid;gap:8px}
+.hrow{display:flex;gap:10px;align-items:center}
+.hrow canvas,.hrow .qmark{width:36px;height:36px;flex:none}
+.hrow p{margin:0;font-size:13px;color:var(--muted)}
+.gifts{grid-template-columns:repeat(3,1fr)}
 </style>
 </head>
 <body>
@@ -195,7 +201,7 @@ h1{font-family:"Bagel Fat One","Arial Black",sans-serif;font-weight:400;font-siz
 
 <script type="module">// Firebase is loaded on demand in boot(), so the game still runs if it can't load.
 const FB='https://www.gstatic.com/firebasejs/10.12.2/';
-let forder,flimit,initializeApp,getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,onAuthStateChanged,signOut,getFirestore,fdoc,setDoc,getDoc,fcol,query,fwhere,fsnap;
+let fdel,forder,flimit,initializeApp,getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,onAuthStateChanged,signOut,getFirestore,fdoc,setDoc,getDoc,fcol,query,fwhere,fsnap;
 
 /* ---------- data ---------- */
 const STEMS={
@@ -251,11 +257,28 @@ let clanTreeLv=0;
 const ASC_REQ=[20,23,27,30,32,35,37,40,42,44,46,48];
 const ascAt=(a=state.asc)=>a<ASC_REQ.length?ASC_REQ[a]:48+2*(a-ASC_REQ.length+1);
 const H=3600*1000;
-const GIFTS={
-  bug:{name:'Ladybug',plural:'ladybugs',arr:'bugs',sum:'bx',col:'bugs',ms:3*H,cd:3*H,max:5,bonus:0.2,eff:'+20% growth',verb:'on guard'},
-  bee:{name:'Bee',plural:'bees',arr:'bees',sum:'bex',col:'bees',ms:3*H,cd:3*H,max:5,bonus:0.25,eff:'+25% sap',verb:'buzzing'},
-  worm:{name:'Earthworm',plural:'earthworms',arr:'worms',sum:'wx',col:'worms',ms:6*H,cd:6*H,max:4,bonus:0.25,eff:'soil dries 25% slower',verb:'in the soil'}};
-const GIFT_KEYS=Object.keys(GIFTS);
+/* Helpers: discovered over time, they live on your plant and multiply slowly.
+   Sending one to a clan mate uses it up. */
+const HELPERS={
+  bug:{name:'Ladybug',plural:'ladybugs',rareName:'Golden ladybug',ms:3*H,regen:8*H,steps:[.20,.15,.10,.05],eff:'more growth',
+    find:'Something might land on a tall, leafy plant.',found:'A ladybug landed on your plant and moved in. You can send ladybugs to clan mates now.'},
+  bee:{name:'Bee',plural:'bees',rareName:'Queen bee',ms:3*H,regen:10*H,steps:[.25,.18,.12,.06],eff:'more sap',
+    find:'Flowers attract visitors, given time.',found:'Your flowers drew in a bee. It’s staying.'},
+  worm:{name:'Earthworm',plural:'earthworms',rareName:'Giant earthworm',ms:6*H,regen:16*H,steps:[.25,.18,.12,.06],eff:'soil dries slower',
+    find:'Well-watered soil gets richer after a new beginning.',found:'Your soil is rich enough for earthworms now.'},
+  firefly:{name:'Firefly',plural:'fireflies',rareName:'Starfly',ms:12*H,regen:12*H,steps:[1],eff:'no night slowdown',
+    find:'Some visitors only come out in the dark.',found:'A firefly found your plant in the dark.'},
+  cloud:{name:'Rain cloud',plural:'rain clouds',rareName:'Rainbow cloud',ms:8*H,regen:20*H,steps:[1],eff:'soil stays full',
+    find:'Keep your soil moist for days on end.',found:'A little rain cloud settled over your plant.'},
+  compost:{name:'Compost',plural:'compost',rareName:'Rich compost',ms:0,regen:0,steps:[],eff:'a burst of growth',instant:true,
+    find:'Old growth turns into something useful.',found:'Your old section turned into compost. Send it to a clan mate for a burst of growth.'}};
+const H_KEYS=Object.keys(HELPERS);
+const STOCK_CAP=3,RARE_CHANCE=0.1,QUEUE_MAX=3,HOME_BONUS={bug:0.04,bee:0.05,worm:0.05};
+const spotsFor=s=>3+Math.min(5,s.asc);
+const FIND_TEST={bug:s=>s.best>=12||s.tiers.length>0,bee:s=>s.bloomSecs>=6*3600,worm:s=>s.asc>=1&&s.waterCount>=25,
+  firefly:s=>s.nightWaters>=5,cloud:s=>s.wetSecs>=72*3600,compost:s=>s.asc>=1};
+function hName(k,rare){const H=HELPERS[k];return rare?H.rareName:H.name;}
+function aName(k,rare){const n=hName(k,rare).toLowerCase();if(k==='compost')return rare?'rich compost':'some compost';return(/^[aeiou]/.test(n)?'an ':'a ')+n;}
 const STAGES=[[1,'Seed'],[4,'Sprout'],[9,'Sapling'],[14,'Budding'],[20,'In bloom'],[30,'Elder'],[45,'Ancient'],[70,'Legend']];
 const CLAN_COLORS=['#C9302C','#2F6DA8','#3E8E4E','#B07CE8','#D98A1E','#1D8A8A','#B8436E','#5B6B2F'];
 
@@ -278,16 +301,18 @@ function cdText(ms){const m=mins(ms);return m>=60?`${Math.floor(m/60)} h${m%60?`
 function newState(){return{v:2,plantName:'Sprout',leaf:'round',flower:'daisy',stem:'spring',petal:'blush',pot:'terracotta',
   level:1,xp:0,sap:0,moisture:80,ts:Date.now(),up:{roots:0,leaves:0,res:0,bloom:0},seeds:0,seedsTotal:0,asc:0,perm:{fertile:0,rain:0,deep:0},
   owned:{leaf:START_LEAVES.slice(),flower:['daisy'],stem:['spring'],petal:['blush'],pot:['terracotta']},
-  leavesBought:0,lastWater:{},dropSeen:{},lastGift:{bug:{},bee:{},worm:{}},giftSeen:{bug:{},bee:{},worm:{}},bugs:[],bees:[],worms:[],clan:null,best:1,tiers:[],help:{day:'',sec:0},mut:null,mutDry:0,mutSeen:[],treeGiven:{}};}
+  leavesBought:0,lastWater:{},dropSeen:{},stock:{},stockTs:{},found:{},visitors:[],collected:[],waterCount:0,nightWaters:0,bloomSecs:0,wetSecs:0,clan:null,best:1,tiers:[],help:{day:'',sec:0},mut:null,mutDry:0,mutSeen:[],treeGiven:{}};}
 function normalize(s){const d=newState();if(!s||typeof s!=='object')return d;
   const o=Object.assign(d,s);o.up=Object.assign(newState().up,s.up||{});o.perm=Object.assign(newState().perm,s.perm||{});
   o.owned=Object.assign(newState().owned,s.owned||{});for(const k of START_LEAVES)if(!o.owned.leaf.includes(k))o.owned.leaf.push(k);
   o.owned.leaf=o.owned.leaf.filter(k=>has(LEAVES,k));if(!has(LEAVES,o.leaf))o.leaf='round';
   for(const k of ['lastWater','dropSeen'])o[k]=(s[k]&&typeof s[k]==='object')?s[k]:{};
-  const obj=v=>(v&&typeof v==='object')?v:{};o.lastGift={};o.giftSeen={};
-  for(const g of GIFT_KEYS){o.lastGift[g]=obj((s.lastGift||{})[g]);o.giftSeen[g]=obj((s.giftSeen||{})[g]);
-    const a=s[GIFTS[g].arr];o[GIFTS[g].arr]=Array.isArray(a)?a.filter(x=>isFinite(x)).slice(-GIFTS[g].max):[];}
-  if(s.lastBug)Object.assign(o.lastGift.bug,s.lastBug);if(s.bugSeen)Object.assign(o.giftSeen.bug,s.bugSeen);delete o.lastBug;delete o.bugSeen;
+  const obj=v=>(v&&typeof v==='object'&&!Array.isArray(v))?v:{};o.stock={};o.stockTs=obj(s.stockTs);o.found=obj(s.found);
+  for(const k of H_KEYS){const a=(s.stock||{})[k];o.stock[k]=Array.isArray(a)?a.map(Boolean).slice(0,STOCK_CAP):[];}
+  o.visitors=Array.isArray(s.visitors)?s.visitors.filter(v=>v&&has(HELPERS,v.type)&&isFinite(v.until)).slice(0,8):[];
+  o.collected=Array.isArray(s.collected)?s.collected.slice(-80):[];
+  for(const k of ['waterCount','nightWaters','bloomSecs','wetSecs'])o[k]=isFinite(s[k])?+s[k]:0;
+  for(const k of ['bugs','bees','worms','lastGift','giftSeen','lastBug','bugSeen'])delete o[k];
   if(typeof o.clan!=='string')o.clan=null;if(!o.help||typeof o.help!=='object'||!isFinite(o.help.sec))o.help={day:'',sec:0};
   if(!has(MUTS,o.mut))o.mut=null;o.mutDry=isFinite(o.mutDry)?o.mutDry:0;o.mutSeen=Array.isArray(o.mutSeen)?o.mutSeen.filter(k=>has(MUTS,k)):[];o.treeGiven=(o.treeGiven&&typeof o.treeGiven==='object')?o.treeGiven:{};
   for(const k of ['xp','sap','moisture','level','seeds','seedsTotal','asc','leavesBought'])if(!isFinite(o[k]))o[k]=d[k];
@@ -298,12 +323,16 @@ let myId=null,db=null,online=false,myName='';
 const sunFactor=ts=>{const h=new Date(ts).getHours();return(h>=6&&h<20)?1:0.6;};
 const moistF=m=>m<=0?0.15:0.35+0.65*Math.min(1,m/35);
 const need=l=>15*Math.pow(1.17,l-1);
-const giftAt=(g,arr,ts)=>Math.min(GIFTS[g].max,(arr||[]).filter(e=>e>ts).length);
-const bugsAt=(arr,ts)=>giftAt('bug',arr,ts);
-function rates(s,ts){const G=(1+0.08*s.seedsTotal)*(1+0.1*s.perm.fertile)*Math.pow(1.12,s.up.bloom)*sunFactor(ts)*(s.clan?1+TREE_STEP*clanTreeLv:1);const mf=moistF(s.moisture);
-  const gx=1+GIFTS.bug.bonus*giftAt('bug',s.bugs,ts),gs=1+GIFTS.bee.bonus*giftAt('bee',s.bees,ts),gw=1+GIFTS.worm.bonus*giftAt('worm',s.worms,ts);
-  return{xp:0.6*(1+0.3*s.up.leaves)*G*gx*mf/PACE,sap:0.15*(1+s.up.roots)*(1+0.05*(s.level-1))*G*gs*mf/PACE,drain:(100/18000)/(1+0.35*s.up.res)/gw,rain:s.perm.rain*0.08/60,mf};}
-function step(s,dt,ts){const r=rates(s,ts);s.moisture=clamp(s.moisture+(r.rain-r.drain)*dt,0,100);s.xp+=r.xp*dt;s.sap+=r.sap*dt;
+/* what the helpers on a plant do right now */
+function helperFx(s,ts){const act={};for(const v of s.visitors||[])if(v.until>ts)(act[v.type]=act[v.type]||[]).push(!!v.rare);
+  const sum=k=>{const st=HELPERS[k].steps;return(act[k]||[]).slice().sort((a,b)=>b-a).reduce((acc,r,i)=>acc+st[Math.min(i,st.length-1)]*(r?2:1),0);};
+  const home=k=>((s.stock||{})[k]||[]).length*(HOME_BONUS[k]||0);const variety=Object.keys(act).length>=3?0.1:0;
+  return{gx:1+sum('bug')+home('bug')+variety,gs:1+sum('bee')+home('bee')+variety,gw:1+sum('worm')+home('worm'),night:!!act.firefly,cloud:!!act.cloud,variety:variety>0};}
+function rates(s,ts){const fx=helperFx(s,ts);const G=(1+0.08*s.seedsTotal)*(1+0.1*s.perm.fertile)*Math.pow(1.12,s.up.bloom)*(fx.night?1:sunFactor(ts))*(s.clan?1+TREE_STEP*clanTreeLv:1);const mf=moistF(s.moisture);
+  const{gx,gs,gw}=fx;
+  return{xp:0.6*(1+0.3*s.up.leaves)*G*gx*mf/PACE,sap:0.15*(1+s.up.roots)*(1+0.05*(s.level-1))*G*gs*mf/PACE,drain:fx.cloud?0:(100/18000)/(1+0.35*s.up.res)/gw,rain:s.perm.rain*0.08/60,mf,fx};}
+function step(s,dt,ts){if(helperFx(s,ts).cloud)s.moisture=100;const r=rates(s,ts);s.moisture=clamp(s.moisture+(r.rain-r.drain)*dt,0,100);
+  if(s.level>=12)s.bloomSecs=(s.bloomSecs||0)+dt;if(s.moisture>50)s.wetSecs=(s.wetSecs||0)+dt;s.xp+=r.xp*dt;s.sap+=r.sap*dt;
   let ups=0;while(s.xp>=need(s.level)){s.xp-=need(s.level);s.level++;s.sap+=s.level*3;ups++;}if(s.level>s.best)s.best=s.level;return ups;}
 function catchUp(report){const now=Date.now();let gap=Math.min(Math.max(0,(now-(state.ts||now))/1000),172800);
   if(gap<10){state.ts=now;return;}const l0=state.level,sap0=state.sap;let t=now-gap*1000;
@@ -328,8 +357,8 @@ function dbError(e){const c=e&&e.code;console.warn('Firestore:',e);if(c==='permi
 const saveRemote=writer(async()=>{if(!online)return;await db.doc(`saves/${myId}`).set(JSON.parse(JSON.stringify(state)));});
 function summary(){const now=Date.now(),r=rates(state,now);return{name:state.plantName,leaf:state.leaf,flower:state.flower,stem:state.stem,
   petal:state.petal,pot:state.pot,level:state.level,asc:state.asc,bloom:state.up.bloom,moisture:Math.round(state.moisture),mts:now,net:+(r.rain-r.drain).toFixed(5),
-  seen:now,owner:myName,clan:state.clan||'',bx:state.bugs.filter(e=>e>now),bex:state.bees.filter(e=>e>now),wx:state.worms.filter(e=>e>now),tiers:state.tiers.slice(-60),mut:state.mut||''};}
-const pubKey=()=>[state.plantName,state.leaf,state.flower,state.stem,state.petal,state.pot,state.level,state.asc,state.up.bloom,state.clan,state.bugs.join(','),state.bees.join(','),state.worms.join(','),state.tiers.length,state.mut].join('|');
+  seen:now,owner:myName,clan:state.clan||'',vis:state.visitors.filter(v=>v.until>now).map(v=>({t:v.type,r:!!v.rare,u:v.until})),home:Object.fromEntries(H_KEYS.map(k=>[k,state.stock[k].map(x=>x?1:0)])),tiers:state.tiers.slice(-60),mut:state.mut||''};}
+const pubKey=()=>[state.plantName,state.leaf,state.flower,state.stem,state.petal,state.pot,state.level,state.asc,state.up.bloom,state.clan,JSON.stringify(state.visitors.map(v=>v.key)),JSON.stringify(state.stock),state.tiers.length,state.mut].join('|');
 let lastPub='';
 const publishGarden=writer(async()=>{if(!online)return;const k=pubKey();await db.doc(`garden/${myId}`).set(summary());lastPub=k;});
 function maybePublish(){if(pubKey()!==lastPub)publishGarden();}
@@ -392,17 +421,17 @@ function drawFlower(g,kind,r,col,isSun){const ctr=isSun?'#7A4A1E':'#F5C542';
     g.beginPath();for(let a=0;a<12;a+=.25){const rr=r*.78*(1-a/12);g.lineTo(Math.cos(a)*rr,Math.sin(a)*rr);}g.stroke();}
   else{g.fillStyle=col;for(let i=0;i<8;i++){const a=i*Math.PI/4;g.beginPath();g.ellipse(Math.cos(a)*r*.55,Math.sin(a)*r*.55,r*.5,r*.22,a,0,7);g.fill();}
     g.fillStyle=ctr;g.beginPath();g.arc(0,0,r*.3,0,7);g.fill();}}
-function drawBug(g,r){g.fillStyle='#1A1A1A';g.beginPath();g.arc(r*.95,0,r*.5,0,7);g.fill();
-  g.fillStyle='#D8312B';g.beginPath();g.ellipse(0,0,r*1.1,r*.95,0,0,7);g.fill();
+function drawBug(g,r,rare){g.fillStyle='#1A1A1A';g.beginPath();g.arc(r*.95,0,r*.5,0,7);g.fill();
+  g.fillStyle=rare?'#E3B23C':'#D8312B';g.beginPath();g.ellipse(0,0,r*1.1,r*.95,0,0,7);g.fill();
   g.strokeStyle='#1A1A1A';g.lineWidth=Math.max(.8,r*.12);g.beginPath();g.moveTo(-r*1.05,0);g.lineTo(r*.7,0);g.stroke();
   g.fillStyle='#1A1A1A';for(const[x,y]of[[-.45,-.45],[.2,-.5],[-.45,.45],[.2,.5]]){g.beginPath();g.arc(x*r,y*r,r*.2,0,7);g.fill();}
   g.fillStyle='rgba(255,255,255,.35)';g.beginPath();g.arc(r*.35,-r*.35,r*.15,0,7);g.fill();}
-function drawBee(g,r,t){g.fillStyle='rgba(255,255,255,.75)';const fl=Math.sin(t*0.06)*0.35;
+function drawBee(g,r,t,rare){if(rare){r*=1.35;}g.fillStyle='rgba(255,255,255,.75)';const fl=Math.sin(t*0.06)*0.35;
   g.beginPath();g.ellipse(-r*.15,-r*.75,r*.55,r*.32,-0.5+fl,0,7);g.ellipse(r*.3,-r*.7,r*.5,r*.3,0.4-fl,0,7);g.fill();
-  g.fillStyle='#F5C542';g.beginPath();g.ellipse(0,0,r*1.1,r*.72,0,0,7);g.fill();
+  g.fillStyle=rare?'#E8A21A':'#F5C542';g.beginPath();g.ellipse(0,0,r*1.1,r*.72,0,0,7);g.fill();
   g.save();g.beginPath();g.ellipse(0,0,r*1.1,r*.72,0,0,7);g.clip();g.fillStyle='#1A1A1A';g.fillRect(-r*.45,-r,r*.28,r*2);g.fillRect(r*.1,-r,r*.28,r*2);g.restore();
   g.fillStyle='#1A1A1A';g.beginPath();g.arc(r*1.05,0,r*.42,0,7);g.fill();g.beginPath();g.moveTo(-r*1.1,0);g.lineTo(-r*1.45,r*.1);g.lineTo(-r*1.08,r*.22);g.fill();}
-function drawWorm(g,len,w,t,ph){g.strokeStyle='#D9787A';g.lineWidth=w;g.lineCap='round';g.beginPath();
+function drawWorm(g,len,w,t,ph,rare){if(rare){w*=1.5;len*=1.3;}g.strokeStyle=rare?'#B85B8C':'#D9787A';g.lineWidth=w;g.lineCap='round';g.beginPath();
   for(let i=0;i<=10;i++){const u=i/10;g.lineTo(Math.sin(u*3+t*0.004+ph)*w*0.9,-u*len);}g.stroke();
   g.strokeStyle='rgba(120,40,50,.35)';g.lineWidth=Math.max(0.6,w*0.18);for(let i=2;i<9;i+=2){const u=i/10,x=Math.sin(u*3+t*0.004+ph)*w*0.9;g.beginPath();g.moveTo(x-w*0.5,-u*len);g.lineTo(x+w*0.5,-u*len);g.stroke();}
   g.fillStyle='#1A1A1A';const hx=Math.sin(3+t*0.004+ph)*w*0.9;g.beginPath();g.arc(hx+w*0.18,-len-w*0.05,Math.max(0.6,w*0.12),0,7);g.fill();}
@@ -421,7 +450,7 @@ function drawTier(g,look,key,idx,level,cur,bx,by,unit,t,inv){const T=genPlant(ke
   const dry=cur?cur.moisture<12:false,seed=hashStr(key)%1000;
   const F=lvl>=12?Math.min(20,1+Math.floor((lvl-12)/3)+(cur?(cur.bloom||0)+(cur.asc||0):idx)):0;
   const mut=look.mut,lc=MUT_LEAF[mut]||st.leaf;
-  const leafScale=s*0.085*(mut==='giant'?1.5:1),flowers=[],anchors=[],wantA=!!(cur&&cur.bugs>0);let top=null;
+  const leafScale=s*0.085*(mut==='giant'?1.5:1),flowers=[],anchors=[],wantA=!!(cur&&cur.bugsR&&cur.bugsR.length);let top=null;
   g.save();g.translate(bx,by);g.lineCap='round';if(dry)g.filter='saturate(0.45) brightness(0.95)';
   (function node(n){const f=clamp(Gr-n.birth,0,1);if(f<=0)return;g.save();
     g.rotate(n.ang+(mut==='twisted'?Math.sin(n.birth*1.9+n.depth*1.3)*0.34:0)+Math.sin(t*0.0012+seed+n.birth*0.7)*(dry?0.006:(cur?0.022:0.012))*(1+n.depth));const L=n.len*s*f;
@@ -439,14 +468,14 @@ function drawTier(g,look,key,idx,level,cur,bx,by,unit,t,inv){const T=genPlant(ke
   if(flowers.length){const pc=(PETALS[look.petal]||PETALS.blush).c,fr=unit*0.05*(0.8+0.4*grow);
     for(const fl of flowers){g.save();g.setTransform(fl.k,0,0,fl.k,fl.e,fl.f);g.rotate(Math.sin(t*0.0015+fl.i*1.7)*0.12);if(mut==='glow'){g.shadowColor=pc;g.shadowBlur=fr*1.6+6*Math.sin(t*0.002+fl.i)+6;}drawFlower(g,look.flower,fr,pc,look.petal==='sun');
       if(mut==='twin'){g.translate(fr*1.1,fr*0.35);g.scale(0.8,0.8);drawFlower(g,look.flower,fr,pc,look.petal==='sun');}g.restore();}}
-  if(cur&&cur.bees>0){const brr=Math.max(3,unit*0.018);
-    for(let i=0;i<cur.bees;i++){let cx0,cy0,k;if(flowers.length){const fl=flowers[(i*3+Math.floor(t/9000+i))%flowers.length];cx0=fl.e;cy0=fl.f;k=fl.k;}
+  if(cur&&cur.beesR&&cur.beesR.length){const brr=Math.max(3,unit*0.018);
+    for(let i=0;i<cur.beesR.length;i++){let cx0,cy0,k;if(flowers.length){const fl=flowers[(i*3+Math.floor(t/9000+i))%flowers.length];cx0=fl.e;cy0=fl.f;k=fl.k;}
       else{const m=g.getTransform();const tp=top||{x:bx,y:by};const pt=m.transformPoint({x:tp.x,y:tp.y});cx0=pt.x;cy0=pt.y;k=Math.hypot(m.a,m.b);}
       const a=t*0.0022*(i%2?1:-1)+i*2.1,R=unit*0.07*(1+0.3*Math.sin(t*0.001+i));const x=cx0+Math.cos(a)*R*k,y=cy0+Math.sin(a*1.3)*R*0.6*k-unit*0.03*k;
-      const dir=-Math.sin(a)*(i%2?1:-1)>0?1:-1;g.save();g.setTransform(k*dir,0,0,k,x,y);drawBee(g,brr,t);g.restore();}}
+      const dir=-Math.sin(a)*(i%2?1:-1)>0?1:-1;g.save();g.setTransform(k*dir,0,0,k,x,y);drawBee(g,brr,t,cur.beesR[i]);g.restore();}}
   if(wantA&&anchors.length){const br=Math.max(3,unit*0.02);
-    for(let i=0;i<cur.bugs;i++){const ph=t/7000+i*0.37,k=(hashStr(key+i)+Math.floor(ph))%anchors.length,A=anchors[k],u=0.2+0.6*(ph%1);
-      g.save();g.setTransform(A.a,A.b,A.c,A.d,A.e+A.a*A.len*u,A.f+A.b*A.len*u);g.translate(0,-br*0.2);drawBug(g,br);g.restore();}}
+    for(let i=0;i<cur.bugsR.length;i++){const ph=t/7000+i*0.37,k=(hashStr(key+i)+Math.floor(ph))%anchors.length,A=anchors[k],u=0.2+0.6*(ph%1);
+      g.save();g.setTransform(A.a,A.b,A.c,A.d,A.e+A.a*A.len*u,A.f+A.b*A.len*u);g.translate(0,-br*0.2);drawBug(g,br*(cur.bugsR[i]?1.2:1),cur.bugsR[i]);g.restore();}}
   return top||{x:bx,y:by};}
 /* P: {id,tiers:[{leaf,stem,flower,petal,level}],leaf,flower,stem,petal,pot,level,asc,bloom,moisture,bugs} */
 function drawPlant(g,P,cx,groundY,unit,t){const inv=g.getTransform().inverse();
@@ -464,20 +493,38 @@ function drawPlant(g,P,cx,groundY,unit,t){const inv=g.getTransform().inverse();
   g.fillStyle=pot.d;g.fillRect(cx-potW*0.52,potTop,potW*1.04,potH*0.2);
   g.fillStyle='rgba(255,255,255,.18)';g.fillRect(cx-potW*0.3,potTop+potH*0.3,potW*0.07,potH*0.55);
   if(P.pot==='gold'){g.fillStyle='rgba(255,255,220,.55)';g.beginPath();g.arc(cx+potW*0.2,potTop+potH*0.45,potW*0.03,0,7);g.fill();}
-  for(let i=0;i<(P.worms||0);i++){const side=i%2?1:-1,x=cx+side*potW*(0.18+0.12*Math.floor(i/2)),up=0.5+0.5*Math.sin(t*0.0009+i*2.3);
-    g.save();g.translate(x,potTop+1);g.beginPath();g.rect(-potW,-unit,potW*2,unit+1);g.clip();drawWorm(g,potH*0.55*up+2,Math.max(2.5,unit*0.022),t,i);g.restore();}
+  const wr=P.wormsR||[];for(let i=0;i<Math.min(6,wr.length);i++){const side=i%2?1:-1,x=cx+side*potW*(0.14+0.11*Math.floor(i/2)),up=0.5+0.5*Math.sin(t*0.0009+i*2.3);
+    g.save();g.translate(x,potTop+1);g.beginPath();g.rect(-potW,-unit,potW*2,unit+1);g.clip();drawWorm(g,potH*0.55*up+2,Math.max(2.5,unit*0.022),t,i,wr[i]);g.restore();}
+  drawSkyHelpers(g,P,(start.x+top.x)/2,top.y,start.y,unit,t);
   const motes=Math.min(12,(P.asc||0)*2),midY=(start.y+top.y)/2,midX=(start.x+top.x)/2,R0=unit*0.3;
   for(let i=0;i<motes;i++){const a=t*0.0006+i*2.4,R=R0+Math.sin(t*0.001+i)*8;
     g.fillStyle=`rgba(255,215,90,${0.5+0.4*Math.sin(t*0.003+i)})`;g.beginPath();g.arc(midX+Math.cos(a)*R,midY+Math.sin(a)*R*0.6,Math.max(1.5,unit*0.008),0,7);g.fill();}
   return top;}
 
+/* fireflies around the plant and a rain cloud above it */
+function drawSkyHelpers(g,P,cx,topY,baseY,unit,t){const ff=P.fliesR||[];const night=skyColors()[2];
+  for(let i=0;i<Math.min(8,ff.length*3);i++){const r=ff[i%ff.length],a=t*0.0004*(1+i%3*0.3)+i*1.7,x=cx+Math.sin(a*1.3+i)*unit*0.35,y=topY+(baseY-topY)*(0.2+0.5*(0.5+0.5*Math.sin(a+i*2)));
+    const glow=(night?0.9:0.55)*(0.5+0.5*Math.sin(t*0.004+i*1.9)),rad=Math.max(2,unit*0.012)*(r?1.4:1);const col=r?'150,200,255':'220,255,120';
+    const gr=g.createRadialGradient(x,y,0,x,y,rad*5);gr.addColorStop(0,`rgba(${col},${glow})`);gr.addColorStop(1,`rgba(${col},0)`);g.fillStyle=gr;g.beginPath();g.arc(x,y,rad*5,0,7);g.fill();
+    g.fillStyle=`rgba(255,255,230,${glow})`;g.beginPath();g.arc(x,y,rad*0.7,0,7);g.fill();}
+  const cl=P.cloud||0;if(!cl)return;const w=unit*0.5,y=topY-unit*0.28,x=cx+Math.sin(t*0.0003)*unit*0.05;
+  if(cl===2){const cols=['#E8505B','#F5A33A','#F5D547','#5DBB63','#4A90D9','#8E6CCB'];for(let i=0;i<cols.length;i++){g.strokeStyle=cols[i];g.globalAlpha=0.45;g.lineWidth=Math.max(1.5,unit*0.012);
+    g.beginPath();g.arc(x,y+unit*0.32,w*0.62-i*unit*0.013,Math.PI*1.08,Math.PI*1.92);g.stroke();}g.globalAlpha=1;}
+  g.fillStyle='rgba(120,180,240,.75)';for(let i=0;i<10;i++){const dx=((i*37)%100/100-0.5)*w*0.8,dy=((t*0.08+i*53)%(unit*0.3));g.beginPath();g.ellipse(x+dx,y+w*0.12+dy,1.4,3.2,0,0,7);g.fill();}
+  g.fillStyle='rgba(250,252,255,.95)';g.beginPath();g.ellipse(x,y,w*0.4,w*0.16,0,0,7);g.ellipse(x-w*0.22,y+w*0.03,w*0.22,w*0.13,0,0,7);g.ellipse(x+w*0.2,y-w*0.06,w*0.24,w*0.17,0,0,7);g.fill();
+  g.fillStyle='rgba(200,215,230,.6)';g.beginPath();g.ellipse(x,y+w*0.1,w*0.38,w*0.07,0,0,7);g.fill();}
 function fit(cv){const r=cv.getBoundingClientRect();const dpr=Math.min(2,window.devicePixelRatio||1);const w=Math.round(r.width*dpr),h=Math.round(r.height*dpr);
   if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h;}const g=cv.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);return{g,w:r.width,h:r.height};}
 function skyColors(){const h=new Date().getHours()+new Date().getMinutes()/60;
   if(h>=7&&h<18)return['#6FB9EC','#CDEAF8',false,'#2C5FA0'];if((h>=18&&h<20.5)||(h>=5&&h<7))return['#E58F63','#F8D7B0',false,'#5A3F7A'];return['#14213D','#36466E',true,'#070B18'];}
 const drops=[];let shake=0,wantFocus=true;
 function myPlant(){return{id:myId||'me',mut:state.mut,tiers:state.tiers,leaf:state.leaf,flower:state.flower,stem:state.stem,petal:state.petal,pot:state.pot,
-  level:state.level,asc:state.asc,bloom:state.up.bloom,moisture:state.moisture,bugs:bugsAt(state.bugs,Date.now()),bees:giftAt('bee',state.bees,Date.now()),worms:giftAt('worm',state.worms,Date.now()),clan:state.clan||'',name:state.plantName};}
+  level:state.level,asc:state.asc,bloom:state.up.bloom,moisture:state.moisture,...helperLooks(state.visitors.filter(v=>v.until>Date.now()).map(v=>({t:v.type,r:!!v.rare})),Object.fromEntries(H_KEYS.map(k=>[k,state.stock[k]])),true),clan:state.clan||'',name:state.plantName};}
+/* turn visitors + helpers living at home into what drawPlant shows */
+function helperLooks(vis,home,asBool){const by=k=>vis.filter(v=>v.t===k).map(v=>!!v.r).concat(((home||{})[k]||[]).map(x=>!!x));
+  const vis2=k=>vis.filter(v=>v.t===k);const cl=vis2('cloud');
+  return{bugsR:by('bug').slice(0,8),beesR:by('bee').slice(0,8),wormsR:by('worm').slice(0,6),fliesR:by('firefly').slice(0,4),
+    cloud:cl.length?(cl.some(v=>v.r)?2:1):0,visCount:vis.length};}
 function heroLayout(w,h){const P=myPlant();const unit=Math.min(w*0.72,h*0.68,360);const worldH=Math.max(h,Math.ceil(stackFullH(P)*unit+46+130));
   const groundY=worldH-40;const growTop=groundY-stackH(P)*unit+unit*0.25;return{P,unit,worldH,groundY,growTop};}
 function focusGrowth(smooth){const sc=$('#heroScroll');const h=sc.clientHeight,w=sc.clientWidth;const L=heroLayout(w,h);
@@ -514,7 +561,7 @@ function readColors(){const cs=getComputedStyle(document.documentElement);const 
   gardenColors={ink:v('--ink'),muted:v('--muted'),g1:v('--grass1'),g2:v('--grass2'),soil:v('--soil'),accent:v('--accent')};}
 function allPlants(){const now=Date.now();const list=[myPlant()];
   for(const p of players.values()){if(p.id===myId)continue;const m=clamp(p.moisture+p.net*(now-p.mts)/1000,0,100);
-    list.push(Object.assign({},p,{moisture:m,bugs:giftAt('bug',p.bx,now),bees:giftAt('bee',p.bex,now),worms:giftAt('worm',p.wx,now)}));}return list;}
+    const vis=p.vis.filter(v=>v.u>now);list.push(Object.assign({},p,{moisture:m,visNow:vis},helperLooks(vis,p.home)));}return list;}
 function gardenList(){const me=myId||'me';let list=allPlants();if(gFilter==='clan'&&state.clan)list=list.filter(p=>p.clan===state.clan);
   list.sort((a,b)=>a.id===me?-1:b.id===me?1:b.level-a.level);return list;}
 function clanColor(id){return CLAN_COLORS[hashStr(id)%CLAN_COLORS.length];}
@@ -539,15 +586,22 @@ function cleanPlant(id,d){const s=v=>typeof v==='string'?v:'';const pick=(o,k,de
   return{id,name:s(d.name).slice(0,18)||'Plant',leaf:pick(LEAVES,d.leaf,'round'),flower:pick(FLOWERS,d.flower,'daisy'),
     stem:pick(STEMS,d.stem,'spring'),petal:pick(PETALS,d.petal,'blush'),pot:pick(POTS,d.pot,'terracotta'),level:Math.floor(clamp(+d.level||1,1,9999)),
     asc:Math.floor(clamp(+d.asc||0,0,999)),bloom:Math.floor(clamp(+d.bloom||0,0,999)),moisture:clamp(+d.moisture||0,0,100),mts:+d.mts||Date.now(),
-    net:clamp(+d.net||-0.05,-1,1),seen:+d.seen||0,owner:s(d.owner).slice(0,30),clan:s(d.clan).slice(0,40),bx:numArr(d.bx,5),bex:numArr(d.bex,5),wx:numArr(d.wx,4),tiers:Array.isArray(d.tiers)?d.tiers.slice(-60).map(cleanTier):[],mut:has(MUTS,d.mut)?d.mut:null};}
+    net:clamp(+d.net||-0.05,-1,1),seen:+d.seen||0,owner:s(d.owner).slice(0,30),clan:s(d.clan).slice(0,40),vis:Array.isArray(d.vis)?d.vis.filter(v=>v&&has(HELPERS,v.t)&&isFinite(v.u)).slice(0,8).map(v=>({t:v.t,r:!!v.r,u:+v.u})):[],home:Object.fromEntries(H_KEYS.map(k=>[k,(Array.isArray((d.home||{})[k])?d.home[k]:[]).slice(0,STOCK_CAP).map(Boolean)])),tiers:Array.isArray(d.tiers)?d.tiers.slice(-60).map(cleanTier):[],mut:has(MUTS,d.mut)?d.mut:null};}
 const numArr=(a,n)=>Array.isArray(a)?a.filter(x=>isFinite(x)).slice(0,n).map(Number):[];
-function giftList(p){const out=[];for(const g of GIFT_KEYS){const n=p[GIFTS[g].arr]||0;if(n)out.push(`${n} ${n>1?GIFTS[g].plural:GIFTS[g].name.toLowerCase()}`);}return out.join(', ');}
+function giftList(p){const vis=p.visNow||(p.id===(myId||'me')?state.visitors.filter(v=>v.until>Date.now()).map(v=>({t:v.type})):[]);const out=[];
+  for(const k of H_KEYS){const n=vis.filter(v=>v.t===k).length;if(n)out.push(`${n} ${n>1?HELPERS[k].plural:HELPERS[k].name.toLowerCase()}`);}return out.length?`visited by ${out.join(', ')}`:'';}
 function ago(ts){const m=Math.round((Date.now()-ts)/60000);if(m<2)return'just now';if(m<60)return`${m} min ago`;const h=Math.round(m/60);if(h<48)return`${h} h ago`;return`${Math.round(h/24)} days ago`;}
-function giftButtons(id){let h='<div class="gifts">';for(const g of GIFT_KEYS){const G=GIFTS[g],cd=(state.lastGift[g][id]||0)+G.cd-Date.now();
-    h+=`<button class="gift ${cd<=0?'go':''}" data-gift="${g}" data-to="${esc(id)}" ${cd>0||!online?'disabled':''} aria-label="Send a ${G.name.toLowerCase()}"><canvas data-icon="gift:${g}" width="56" height="56"></canvas>${cd>0?cdText(cd):`Send ${G.name.toLowerCase()}`}</button>`;}
+function helperButtons(id){let h='<div class="gifts">';const now=Date.now();
+  for(const k of H_KEYS){const H=HELPERS[k];
+    if(!state.found[k]){h+=`<button class="gift" disabled aria-label="Not discovered yet"><span class="qmark">?</span>Not found yet</button>`;continue;}
+    const fl=sentTo(k,id),n=state.stock[k].length;let label,ok=false;
+    if(fl)label=fl.status==='visiting'?'Visiting':fl.status==='queued'?'Waiting':'On its way';
+    else if(!n)label=`Next in ${cdText(nextStockIn(k))}`;else{label=`Send ${H.name.toLowerCase()} (${n})`;ok=true;}
+    h+=`<button class="gift ${ok?'go':''}" data-gift="${k}" data-to="${esc(id)}" ${ok&&online?'':'disabled'} aria-label="${esc(label)}"><canvas data-icon="gift:${k}" width="56" height="56"></canvas>${esc(label)}</button>`;}
   return h+'</div>';}
+const giftButtons=helperButtons;
 function renderCard(){const card=$('#gcard');if(!selected){card.hidden=true;return;}card.hidden=false;
-  if(selected===(myId||'me')){card.innerHTML=`<div class="txt"><b>${esc(state.plantName)}</b><p>This is your plant. Friends can water it, and clan mates can send it ladybugs, bees and earthworms.</p></div>`;return;}
+  if(selected===(myId||'me')){card.innerHTML=`<div class="txt"><b>${esc(state.plantName)}</b><p>This is your plant. Friends can water it, and clan mates can send it helpers once they’ve found some.</p></div>`;return;}
   const p=allPlants().find(x=>x.id===selected);if(!p){card.hidden=true;return;}
   const owner=names[p.id]||'Someone',cd=(state.lastWater[p.id]||0)+WATER_CD-Date.now(),cl=p.clan&&clans.get(p.clan);const mate=state.clan&&p.clan===state.clan;
   card.innerHTML=`<div class="txt"><b>${esc(p.name)}</b><p>Grown by ${esc(owner)}${cl?` in ${esc(cl.name)}`:''}. Level ${p.level}, ${esc(LEAVES[p.leaf].name.toLowerCase())} leaves${p.asc?`, ascended ${p.asc}×`:''}. Soil ${Math.round(p.moisture)}%${giftList(p)?`, ${giftList(p)}`:''}. Seen ${ago(p.seen)}.</p>${mate?giftButtons(p.id):''}</div>
@@ -558,19 +612,91 @@ async function waterOther(){const id=selected;if(!online||!id||id===myId)return;
   const cell=gardenCells.find(c=>c.id===id);if(cell)for(let i=0;i<22;i++)gardenDrops.push({x:cell.x+cell.w*(0.3+Math.random()*0.4),y:cell.y+10+Math.random()*30,v:Math.random()*2,stop:cell.y+cell.h-40});
   toast(`You watered ${nameOf(id)}.${helpNote(rw)}`);renderCard();saveSoon();
   try{await db.doc(`drops/${id}__${myId}`).set({to:id,from:myId,at:Date.now()});}catch(e){dbError(e);}}
-async function sendGift(g,id){const G=GIFTS[g];if(!G||!online||!id||id===myId)return;const p=players.get(id);if(!p||!state.clan||p.clan!==state.clan)return;
-  if(Date.now()-(state.lastGift[g][id]||0)<G.cd)return;state.lastGift[g][id]=Date.now();
-  const rw=helpReward(15);toast(`${G.name==='Earthworm'?'An earthworm':'A '+G.name.toLowerCase()} is on its way to ${p.name}.${helpNote(rw)}`);
-  renderCard();buildClan();saveSoon();try{await db.doc(`${G.col}/${id}__${myId}`).set({to:id,from:myId,at:Date.now()});}catch(e){dbError(e);}}
 function handleDrops(snap){let got=0;for(const d of snap.docs){const v=d.data()||{};const from=String(v.from||'');const at=+v.at||0;
   if(!from||from===myId||v.to!==myId)continue;if(at>(state.dropSeen[from]||0)&&at<=Date.now()+60000){state.dropSeen[from]=at;state.moisture=Math.min(100,state.moisture+35);got++;
     toast(`${names[from]||'A neighbor'} watered your plant.`);}}
   if(got){shake=1;spawnHeroDrops(30);saveSoon();publishGarden();}}
-function handleGifts(g,snap){const G=GIFTS[g];let got=0;const now=Date.now();for(const d of snap.docs){const v=d.data()||{};const from=String(v.from||'');const at=+v.at||0;
-  if(!from||from===myId||v.to!==myId)continue;if(at>(state.giftSeen[g][from]||0)&&at<=now+60000){state.giftSeen[g][from]=at;
-    state[G.arr]=state[G.arr].filter(e=>e>now).concat(now+G.ms).sort((a,b)=>a-b).slice(-G.max);got++;
-    toast(`${names[from]||'A clan mate'} sent you ${G.name==='Earthworm'?'an earthworm':'a '+G.name.toLowerCase()}: ${G.eff} for ${G.ms/H} hours.`);}}
-  if(got){saveSoon();publishGarden();buildClan();}}
+let sentDocs=new Map(),incomingDocs=new Map(),markedQueued=new Set();
+function sentTo(k,to){for(const d of sentDocs.values())if(d.type===k&&d.to===to&&['sent','queued','visiting'].includes(d.status))return d;return null;}
+function nextStockIn(k){const H=HELPERS[k];if(!H.regen)return Infinity;return Math.max(0,(state.stockTs[k]||Date.now())+H.regen-Date.now());}
+function addStock(k,force){const a=state.stock[k];if(a.length>=STOCK_CAP&&!force)return false;const rare=Math.random()<RARE_CHANCE;a.push(rare);
+  if(rare)toast(`A ${hName(k,true).toLowerCase()} appeared on your plant! It has double the effect.`);return true;}
+/* helpers slowly multiply while there is room at home */
+function regenStock(now){for(const k of H_KEYS){const H=HELPERS[k];if(!state.found[k]||!H.regen)continue;
+    if(!state.stockTs[k])state.stockTs[k]=now;
+    while(state.stock[k].length<STOCK_CAP&&now-state.stockTs[k]>=H.regen){state.stockTs[k]+=H.regen;addStock(k);}
+    if(state.stock[k].length>=STOCK_CAP)state.stockTs[k]=now;}}
+function checkFinds(){let any=false;for(const k of H_KEYS){if(state.found[k]||!FIND_TEST[k](state))continue;state.found[k]=Date.now();state.stockTs[k]=Date.now();
+    if(!HELPERS[k].instant)addStock(k);toast(HELPERS[k].found);any=true;}
+  if(any){saveSoon();buildClan();}}
+async function sendGift(k,to){const H=HELPERS[k];if(!H||!online||!to||to===myId)return;const p=players.get(to);if(!p||!state.clan||p.clan!==state.clan)return;
+  if(!state.found[k]||!state.stock[k].length)return;if(sentTo(k,to)){toast(`You already sent ${p.name} ${aName(k)}.`);return;}
+  const a=state.stock[k],ri=a.indexOf(true),rare=ri>=0;a.splice(rare?ri:0,1);if(a.length===STOCK_CAP-1)state.stockTs[k]=Date.now();
+  const id=`${to}__${myId}__${k}`,doc={to,from:myId,type:k,rare,at:Date.now(),status:'sent',name:myName||state.plantName};
+  sentDocs.set(id,Object.assign({id},doc));saveSoon();refreshClanButtons();renderCard();
+  try{await db.doc(`gifts/${id}`).set(doc);toast(`${aName(k,rare).replace(/^./,c=>c.toUpperCase())} is on its way to ${p.name}.`);}
+  catch(e){sentDocs.delete(id);a.push(rare);dbError(e);toast('That didn’t go through. Try again in a moment.');refreshClanButtons();}}
+async function recallGift(id){const d=sentDocs.get(id);if(!d||!['sent','queued'].includes(d.status))return;
+  const{id:_,...rest}=d;try{await db.doc(`gifts/${id}`).set(Object.assign({},rest,{status:'recalled',updatedAt:Date.now()}));}
+  catch(e){toast('It already moved in, so it can’t be called back now.');return;}
+  addStock(d.type,true);state.stock[d.type][state.stock[d.type].length-1]=!!d.rare;state.collected.push(`${id}@${d.at}`);
+  toast(`Your ${hName(d.type,d.rare).toLowerCase()} flew back home.`);sentDocs.delete(id);db.doc(`gifts/${id}`).del().catch(()=>{});saveSoon();refreshClanButtons();}
+/* the receiver changes a helper's status; rules check every step */
+function markGift(id,status,extra){const d=incomingDocs.get(id);if(!d)return Promise.resolve(false);const{id:_,...rest}=d;
+  const nd=Object.assign({},rest,{status,updatedAt:Date.now()},extra||{});incomingDocs.set(id,Object.assign({id},nd));
+  return db.doc(`gifts/${id}`).set(nd).then(()=>true,e=>{console.warn('gift',e);return false;});}
+/* my own sent helpers: collect thank-yous and returns */
+function handleSent(sn){const now=Date.now();sentDocs=new Map();
+  for(const d of sn.docs){if(!d.exists)continue;const v=Object.assign({id:d.id},d.data()||{});if(v.from!==myId||!has(HELPERS,v.type))continue;
+    const key=`${d.id}@${v.at}`;const to=players.get(v.to),toName=to?to.name:'a plant';
+    if(['done','dismissed','used','recalled'].includes(v.status)){
+      if(!state.collected.includes(key)){state.collected.push(key);state.collected=state.collected.slice(-80);
+        if(v.status==='done'||v.status==='used'){const rw=helpReward(v.status==='used'?10:20);let seed='';if(Math.random()<0.05){state.seeds++;state.seedsTotal++;seed=' and a seed';}
+          toast(`Your ${hName(v.type,v.rare).toLowerCase()} came back from ${toName} with a thank-you: +${fmt(rw.sap)} sap${seed}.`);}
+        else if(v.status==='dismissed'){addStock(v.type,true);state.stock[v.type][state.stock[v.type].length-1]=!!v.rare;toast(`${toName} sent your ${hName(v.type,v.rare).toLowerCase()} home. It’s back with you.`);}
+        saveSoon();}
+      db.doc(`gifts/${d.id}`).del().catch(()=>{});continue;}
+    sentDocs.set(d.id,v);}
+  refreshClanButtons();renderCard();}
+function handleIncoming(sn){incomingDocs=new Map();for(const d of sn.docs){if(!d.exists)continue;const v=Object.assign({id:d.id},d.data()||{});if(v.to===myId&&has(HELPERS,v.type))incomingDocs.set(d.id,v);}
+  processIncoming();}
+/* move helpers in, queue them when the plant is full, let them leave when their time is up */
+function processIncoming(){if(!online)return;const now=Date.now();let changed=false;
+  for(const v of state.visitors)if(v.until<=now){markGift(v.id,'done');changed=true;}
+  state.visitors=state.visitors.filter(v=>v.until>now);
+  for(const v of state.visitors){const d=incomingDocs.get(v.id);if(d&&d.status==='recalled'){state.visitors=state.visitors.filter(x=>x!==v);changed=true;}}
+  const docs=[...incomingDocs.values()].filter(d=>d.status==='sent'||d.status==='queued').sort((a,b)=>a.at-b.at);
+  for(const d of docs){const key=`${d.id}@${d.at}`;if(state.visitors.some(v=>v.key===key))continue;const H=HELPERS[d.type],who=names[d.from]||d.name||'A clan mate';
+    const isNew=d.status==='sent'&&!markedQueued.has(key);const note=state.found[d.type]?'':' You haven’t found these yourself yet.';
+    if(H.instant){if(state.collected.includes(key))continue;state.collected.push(key);const gain=need(state.level)*(d.rare?1:0.5);state.xp+=gain;step(state,0.001,now);
+      markGift(d.id,'used');toast(`${who} sent you ${aName(d.type,d.rare)}. Your plant shot up.${note}`);changed=true;continue;}
+    if(state.visitors.length<spotsFor(state)){const until=now+H.ms*(d.rare&&H.steps.length===1?2:1);
+      state.visitors.push({key,id:d.id,type:d.type,rare:!!d.rare,from:d.from,name:String(d.name||'').slice(0,30),until});changed=true;
+      markGift(d.id,'visiting',{until}).then(ok=>{if(!ok){state.visitors=state.visitors.filter(v=>v.key!==key);saveSoon();maybePublish();}});
+      toast(`${who} sent you ${aName(d.type,d.rare)}: ${H.eff}${d.rare?', twice as strong':''}.${note}`);if(d.type==='cloud')spawnHeroDrops(30);}
+    else if(isNew){markedQueued.add(key);const queued=docs.filter(x=>x.status==='queued').length;
+      if(queued<QUEUE_MAX){markGift(d.id,'queued');toast(`${who} sent you ${aName(d.type,d.rare)}, but every spot is taken. It will wait for a free one.`);}
+      else{incomingDocs.set(d.id,Object.assign({},d,{status:'visiting'}));markGift(d.id,'visiting',{until:now}).then(()=>markGift(d.id,'dismissed'));toast(`${who} sent you ${aName(d.type,d.rare)}, but your plant is crowded. It went back home.`);}}}
+  if(changed){saveSoon();maybePublish();refreshClanButtons();}}
+async function sendHome(key){const v=state.visitors.find(x=>x.key===key);if(!v)return;state.visitors=state.visitors.filter(x=>x!==v);
+  await markGift(v.id,'dismissed');toast(`The ${hName(v.type,v.rare).toLowerCase()} flew back to ${names[v.from]||v.name||'its owner'}.`);saveSoon();maybePublish();processIncoming();refreshClanButtons();}
+function helpersHtml(){const now=Date.now(),found=H_KEYS.filter(k=>state.found[k]);
+  let h=`<div id="helpersBox"><h2>Helpers</h2>`;
+  if(!found.length)h+=`<p class="note">Nothing has found your plant yet. Keep growing, and something might turn up.</p>`;
+  h+=`<div class="hlist">`;for(const k of H_KEYS){const H=HELPERS[k];
+    if(!state.found[k]){h+=`<div class="hrow"><span class="qmark">?</span><div><b>Not found yet</b><p>${esc(H.find)}</p></div></div>`;continue;}
+    const a=state.stock[k],rare=a.filter(Boolean).length;
+    h+=`<div class="hrow"><canvas data-icon="gift:${k}" width="56" height="56"></canvas><div><b>${H.name}</b> <span class="lv">${a.length} of ${STOCK_CAP} at home${rare?`, ${rare} rare`:''}</span>
+      <p>${esc(H.eff[0].toUpperCase()+H.eff.slice(1))}.${H.instant?' You get one each time you ascend.':a.length>=STOCK_CAP?' Home is full.':` Next one in ${cdText(nextStockIn(k))}.`}</p></div></div>`;}
+  h+=`</div>`;
+  const vis=state.visitors.filter(v=>v.until>now),q=[...incomingDocs.values()].filter(d=>d.status==='queued');
+  h+=`<h2>Visitors on your plant</h2><p class="note">${vis.length} of ${spotsFor(state)} spots taken. Each ascension adds a spot.${helperFx(state,now).variety?' Three kinds at once make your plant lively: +10% growth and sap.':''}</p>`;
+  for(const v of vis)h+=`<div class="row"><div class="txt"><b>${esc(hName(v.type,v.rare))}</b><p>From ${esc(names[v.from]||v.name||'a clan mate')}, ${cdText(v.until-now)} left.</p></div><button class="linkish" data-home="${esc(v.key)}">Send home</button></div>`;
+  for(const d of q)h+=`<div class="row"><div class="txt"><b>${esc(hName(d.type,d.rare))}</b><p>From ${esc(names[d.from]||d.name||'a clan mate')}, waiting for a free spot.</p></div></div>`;
+  const out=[...sentDocs.values()];if(out.length){h+=`<h2>Sent helpers</h2>`;
+    for(const d of out){const to=players.get(d.to),st=d.status==='visiting'?`visiting until ${new Date(d.until).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`:d.status==='queued'?'waiting for a free spot':'on its way';
+      h+=`<div class="row"><div class="txt"><b>${esc(hName(d.type,d.rare))}</b><p>To ${esc(to?to.name:'a plant')}, ${st}.</p></div>${d.status!=='visiting'?`<button class="linkish" data-recall="${esc(d.id)}">Call back</button>`:''}</div>`;}}
+  return h+`</div>`;}
 async function createClan(){const inp=$('#clanName');const nm=(inp&&inp.value||'').trim().replace(/\s+/g,' ').slice(0,24);
   if(nm.length<2){toast('Give your clan a name of at least 2 letters.');return;}
   if([...clans.values()].some(c=>c.name.toLowerCase()===nm.toLowerCase())){toast('A clan with that name already exists. Join it or pick another name.');return;}
@@ -587,7 +713,7 @@ function buildClan(){const el=$('#p-clan');if(!el)return;const keep=$('#clanName
   if(!online){el.innerHTML=`<h2>Clans</h2><p class="note">Clans need the shared garden. Open this page signed in, with edit access, to join one.</p>`;return;}
   const mine=state.clan&&clans.get(state.clan);
   if(state.clan&&!mine&&!clansLoaded){el.innerHTML=`<p class="note">Finding your clan…</p>`;return;}
-  if(!mine){let h=`<h2>Join a clan</h2><p class="note">Clan mates send each other helpers. Ladybugs give +20% growth and bees +25% sap, each for 3 hours. Earthworms make soil dry 25% slower for 6 hours.</p>`;
+  if(!mine){let h=(H_KEYS.some(k=>state.found[k])?helpersHtml():'')+`<h2>Join a clan</h2><p class="note">Clan mates send each other the helpers they’ve found.</p>`;
     const list=[...clans.entries()].map(([id,c])=>Object.assign({id},c,clanStats(id))).filter(c=>c.ms.length>0||c.by===myId).sort((a,b)=>b.lv-a.lv);
     if(!list.length)h+=`<p class="note">No clans yet. Found the first one.</p>`;
     for(const c of list)h+=`<div class="row"><div class="txt"><b>${esc(c.name)}</b><p>${c.ms.length} member${c.ms.length===1?'':'s'}, ${c.lv} total levels</p></div><button class="buy" data-join="${esc(c.id)}">Join</button></div>`;
@@ -599,7 +725,8 @@ function buildClan(){const el=$('#p-clan');if(!el)return;const keep=$('#clanName
     <div><h2>${esc(mine.name)}</h2><p class="note" style="margin:0">${ms.length} member${ms.length===1?'':'s'}, ${st.lv} total levels, ${st.asc} ascensions${rank?`. Rank ${rank} in the garden`:''}.</p></div></div>
     <h2>Clan tree</h2><canvas id="treeCv" aria-label="Clan tree"></canvas><div class="prog"><i id="treeBar"></i></div><p class="note" id="treeNote"></p>
     <div class="donate"><button class="buy" data-donate="0.1">Give 10% of your sap</button><button class="buy" data-donate="0.25">Give 25%</button></div><p class="note" id="treeTop"></p>
-    <h2>Members</h2><p class="note">Ladybugs give +20% growth and bees +25% sap, each for 3 hours, up to 5 at once. Earthworms make soil dry 25% slower for 6 hours, up to 4 at once. You can send each mate one of each whenever it’s ready. Helping earns you a little sap, up to 2 hours of your own sap flow per day.</p>`;
+    ${helpersHtml()}
+    <h2>Members</h2><p class="note" hidden>Ladybugs give +20% growth and bees +25% sap, each for 3 hours, up to 5 at once. Earthworms make soil dry 25% slower for 6 hours, up to 4 at once. You can send each mate one of each whenever it’s ready. Helping earns you a little sap, up to 2 hours of your own sap flow per day.</p>`;
   for(const p of ms){const you=p.id===me;
     h+=`<div class="member"><b>${esc(p.name)}</b><span class="lv">Lv ${p.level}</span><p>${you?'You':esc(names[p.id]||'Someone')}${giftList(p)?`, ${giftList(p)}`:''}. ${you?'':`Seen ${ago(p.seen)}.`}</p>${you?'':giftButtons(p.id)}</div>`;}
   if(ms.length<2)h+=`<p class="note">Share this page with friends so they can join ${esc(mine.name)}.</p>`;
@@ -662,7 +789,7 @@ function drawClanTree(t){const cv=$('#treeCv');if(!cv||!subClanId)return;const{g
 
 /* ---------- UI ---------- */
 function spawnHeroDrops(n){const w=$('#hero').getBoundingClientRect().width,sy=$('#heroScroll').scrollTop;for(let i=0;i<n;i++)drops.push({x:w/2+(Math.random()-0.5)*w*0.35,y:sy-10-Math.random()*80,v:2+Math.random()*2});}
-function water(){state.moisture=100;spawnHeroDrops(26);saveSoon();}
+function water(){if(state.moisture<95){state.waterCount++;const h=new Date().getHours();if(h<6||h>=20)state.nightWaters++;}state.moisture=100;spawnHeroDrops(26);saveSoon();checkFinds();}
 function setStatus(){const ab=$('#authBtn');if(ab){ab.hidden=!auth;ab.textContent=myId?'Sign out':'Sign in with Google';}
   $('#statusTxt').textContent=online?`${players.size||1} plant${players.size===1?'':'s'} in the garden`:'Playing on this device';}
 function buildGrow(){let h=`<h2>Feed your plant</h2><p class="note" id="rateNote"></p>`;
@@ -685,7 +812,13 @@ function buildLook(){let h=`<h2>Name</h2><div class="namefield"><input id="nameI
 function buildIcons(){document.querySelectorAll('canvas[data-icon]').forEach(c=>{const[cat,k]=c.dataset.icon.split(':');const g=c.getContext('2d');const S=c.width;g.clearRect(0,0,S,S);
   g.save();g.scale(S/56,S/56);g.translate(28,28);
   if(cat==='leaf'){const L=['willow','palm'].includes(k)?26:['clover','needle'].includes(k)?36:38;g.rotate(-Math.PI/4);g.translate(-L*0.5,0);drawLeaf(g,k,L,STEMS[state.stem].leaf[0]);}
-  else if(cat==='gift'){if(k==='bug')drawBug(g,17);else if(k==='bee'){g.translate(-2,5);drawBee(g,16,0);}else{g.translate(0,24);drawWorm(g,44,9,0,0);}}
+  else if(cat==='gift'){if(k==='bug')drawBug(g,17);else if(k==='bee'){g.translate(-2,5);drawBee(g,16,0);}else if(k==='worm'){g.translate(0,24);drawWorm(g,44,9,0,0);}
+    else if(k==='firefly'){const gr=g.createRadialGradient(0,0,0,0,0,24);gr.addColorStop(0,'rgba(220,255,120,.95)');gr.addColorStop(1,'rgba(220,255,120,0)');g.fillStyle=gr;g.beginPath();g.arc(0,0,24,0,7);g.fill();
+      g.fillStyle='#3A3A2A';g.beginPath();g.ellipse(-4,0,9,5,0,0,7);g.fill();g.fillStyle='#F6FF9E';g.beginPath();g.ellipse(6,0,7,6,0,0,7);g.fill();}
+    else if(k==='cloud'){g.fillStyle='rgba(120,180,240,.9)';for(const dx of[-9,0,9]){g.beginPath();g.ellipse(dx,14,2,5,0,0,7);g.fill();}
+      g.fillStyle='#E9F1F8';g.beginPath();g.ellipse(0,-2,20,9,0,0,7);g.ellipse(-10,0,11,8,0,0,7);g.ellipse(9,-6,12,10,0,0,7);g.fill();}
+    else{g.fillStyle='#6B4A2F';g.beginPath();g.ellipse(0,8,22,12,0,Math.PI,0);g.fill();g.fillStyle='#4E3522';for(const[x,y]of[[-8,2],[4,-1],[10,4],[-2,6]]){g.beginPath();g.arc(x,y,3,0,7);g.fill();}
+      g.fillStyle='#6DBB55';g.beginPath();g.ellipse(-4,-6,7,3,-0.6,0,7);g.ellipse(5,-7,7,3,0.6,0,7);g.fill();}}
   else drawFlower(g,k,18,PETALS[state.petal].c,state.petal==='sun');g.restore();});}
 function buildAscend(){const can=state.level>=ascAt(),gain=seedsFor(state.level);
   let h=`<h2>Ascend</h2><p class="note">At level ${ascAt()} your plant can scatter seeds. The current section stops growing and keeps its look forever, and a new section grows on top of it with whatever look you pick next. Levels and sap reset, and each ascension needs a few more levels than the last. You keep leaves, looks, your clan and seed upgrades. Every seed you have ever earned adds 8% to growth and sap.</p>
@@ -703,12 +836,12 @@ function buildAscend(){const can=state.level>=ascAt(),gain=seedsFor(state.level)
 let ascArm=0;
 function ascend(){if(state.level<ascAt())return;if(Date.now()-ascArm>4000){ascArm=Date.now();$('#ascBtn').textContent='Tap again to ascend';return;}
   const gain=seedsFor(state.level);state.tiers.push({leaf:state.leaf,stem:state.stem,flower:state.flower,petal:state.petal,level:state.level,mut:state.mut});state.mut=rollMutation();if(state.mut&&!state.mutSeen.includes(state.mut))state.mutSeen.push(state.mut);state.seeds+=gain;state.seedsTotal+=gain;state.asc++;
-  Object.assign(state,{level:1,xp:0,sap:0,moisture:100});state.up={roots:2*state.perm.deep,leaves:0,res:0,bloom:0};
-  toast(`This section rests at level ${state.tiers[state.tiers.length-1].level}. New growth starts on top. +${gain} seeds.`);if(state.mut)setTimeout(()=>toast(`A mutation! Your new growth is ${MUTS[state.mut].name.toLowerCase()}: ${MUTS[state.mut].desc}.`),900);wantFocus=true;buildAll();saveSoon();publishGarden();}
+  Object.assign(state,{level:1,xp:0,sap:0,moisture:100});state.up={roots:2*state.perm.deep,leaves:0,res:0,bloom:0};if(state.found.compost)addStock('compost');
+  toast(`This section rests at level ${state.tiers[state.tiers.length-1].level}. New growth starts on top. +${gain} seeds.`);if(state.mut)setTimeout(()=>toast(`A mutation! Your new growth is ${MUTS[state.mut].name.toLowerCase()}: ${MUTS[state.mut].desc}.`),900);wantFocus=true;checkFinds();buildAll();saveSoon();publishGarden();}
 function buildAll(){buildGrow();buildLook();buildAscend();buildClan();refresh();}
-function refresh(){const now=Date.now(),r=rates(state,now),n=need(state.level),mp=myPlant(),gl=giftList(mp);
+function refresh(){const now=Date.now(),r=rates(state,now),n=need(state.level),mp=myPlant(),gl=giftList({id:myId||'me'});
   $('#pname').textContent=state.plantName;
-  $('#stageName').textContent=`${stageName(state.level)}${state.mut?`, ${MUTS[state.mut].name.toLowerCase()}`:''}${gl?`, with ${gl}`:''}${sunFactor(now)<1?', resting for the night':''}`;
+  $('#stageName').textContent=`${stageName(state.level)}${state.mut?`, ${MUTS[state.mut].name.toLowerCase()}`:''}${gl?`, ${gl}`:''}${sunFactor(now)<1?', resting for the night':''}`;
   $('#sLevel').textContent=state.level;$('#sXpRate').textContent=`${fmt(r.xp*3600)} growth/h`;
   $('#sSap').textContent=fmt(state.sap);$('#sSapRate').textContent=`+${fmt(r.sap*3600)}/h`;
   $('#sSeeds').textContent=state.seeds;$('#sAsc').textContent=state.asc?`Ascended ${state.asc}×`:'Not ascended';
@@ -730,6 +863,8 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
   if(b.dataset.donate)return donate(+b.dataset.donate);
   if(b.dataset.join)return joinClan(b.dataset.join);
   if(b.dataset.gift)return sendGift(b.dataset.gift,b.dataset.to);
+  if(b.dataset.recall)return recallGift(b.dataset.recall);
+  if(b.dataset.home)return sendHome(b.dataset.home);
   if(b.dataset.gfilter){gFilter=b.dataset.gfilter;if(gFilter==='clan'&&!state.clan)toast('Join a clan in the Clan tab first.');
     document.querySelectorAll('[data-gfilter]').forEach(x=>x.setAttribute('aria-pressed',x===b));return;}
   if(b.dataset.tab){document.querySelectorAll('[data-tab]').forEach(t=>t.setAttribute('aria-selected',t===b));
@@ -753,15 +888,16 @@ $('#garden').addEventListener('click',e=>{const r=e.currentTarget.getBoundingCli
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{gardenColors=null;});
 
 /* ---------- loops ---------- */
-let lastRemote=Date.now(),lastPubBeat=Date.now(),lastLocal=Date.now(),lastCard=0;
+let lastHelperTick=0,lastRemote=Date.now(),lastPubBeat=Date.now(),lastLocal=Date.now(),lastCard=0;
 function tick(){const now=Date.now();let dt=(now-state.ts)/1000;if(dt>30){catchUp(true);}else if(dt>0){const ups=step(state,dt,now);state.ts=now;
     if(ups){toast(`${state.plantName} reached level ${state.level}.`);buildGrow();buildAscend();maybePublish();}}
-  for(const g of GIFT_KEYS){const a=state[GIFTS[g].arr];if(a.length&&a[0]<=now){state[GIFTS[g].arr]=a.filter(e=>e>now);maybePublish();}}
+  if(now-lastHelperTick>5000){lastHelperTick=now;regenStock(now);checkFinds();if(state.visitors.some(v=>v.until<=now))processIncoming();}
   refresh();if(now-lastLocal>5000){lastLocal=now;saveLocal();}
   if(now-lastRemote>60000){lastRemote=now;saveRemote();}
   if(now-lastPubBeat>180000){lastPubBeat=now;publishGarden();}
   if(now-lastCard>15000){lastCard=now;if(!$('#p-garden').hidden)renderCard();if(!$('#p-clan').hidden)refreshClanButtons();}}
-function refreshClanButtons(){document.querySelectorAll('#p-clan .gifts').forEach(gd=>{const b=gd.querySelector('[data-to]');if(b)gd.outerHTML=giftButtons(b.dataset.to);});buildIcons();renderTreeInfo();}
+function refreshClanButtons(){document.querySelectorAll('.gifts').forEach(gd=>{const b=gd.querySelector('[data-to]');if(b)gd.outerHTML=helperButtons(b.dataset.to);});
+  const hb=$('#helpersBox');if(hb)hb.outerHTML=helpersHtml();buildIcons();renderTreeInfo();}
 function frame(t){if(!document.hidden){drawHero(t);if(!$('#p-garden').hidden)drawGarden(t);if(!$('#p-clan').hidden)drawClanTree(t);}requestAnimationFrame(frame);}
 document.addEventListener('visibilitychange',()=>{if(document.hidden){saveLocal();saveRemote();}else tick();});
 window.addEventListener('pagehide',saveLocal);
@@ -774,11 +910,11 @@ let auth=null,unsubs=[];
 function makeDb(fs){
   const wrap=d=>({id:d.id,exists:d.exists(),data:()=>d.data()});
   const q=ref=>({where:(f,op,v)=>q(query(ref,fwhere(f,op,v))),orderBy:(f,d)=>q(query(ref,forder(f,d))),limit:n=>q(query(ref,flimit(n))),onSnapshot:(next,err)=>fsnap(ref,sn=>next({docs:sn.docs.map(wrap)}),err)});
-  return{doc:p=>{const r=fdoc(fs,PREFIX+p);return{set:data=>setDoc(r,data),get:async()=>wrap(await getDoc(r))};},collection:p=>q(fcol(fs,PREFIX+p))};}
+  return{doc:p=>{const r=fdoc(fs,PREFIX+p);return{set:data=>setDoc(r,data),del:()=>fdel(r),get:async()=>wrap(await getDoc(r))};},collection:p=>q(fcol(fs,PREFIX+p))};}
 async function signIn(){const pr=new GoogleAuthProvider();
   try{await signInWithPopup(auth,pr);}catch(e){if(e&&(e.code==='auth/popup-blocked'||e.code==='auth/operation-not-supported-in-this-environment'))await signInWithRedirect(auth,pr);
     else if(e&&e.code!=='auth/popup-closed-by-user'&&e.code!=='auth/cancelled-popup-request')toast('Sign-in failed: '+(e.code||'unknown error'));}}
-function disconnect(){unsubClan();unsubs.forEach(f=>{try{f();}catch(e){}});unsubs=[];if(online){saveLocal();}online=false;myId=null;myName='';players=new Map();clans=new Map();clansLoaded=false;
+function disconnect(){sentDocs=new Map();incomingDocs=new Map();unsubClan();unsubs.forEach(f=>{try{f();}catch(e){}});unsubs=[];if(online){saveLocal();}online=false;myId=null;myName='';players=new Map();clans=new Map();clansLoaded=false;
   $('#gardenNote').textContent='Sign in with Google to share a garden. Until then your plant lives on this device.';setStatus();buildClan();}
 async function connect(u){disconnect();myId=u.uid;myName=(u.displayName||'').trim().split(/\s+/)[0].slice(0,30)||'Gardener';
   $('#gardenNote').textContent='Everyone’s plants grow here. Tap one to visit it.';
@@ -786,14 +922,15 @@ async function connect(u){disconnect();myId=u.uid;myName=(u.displayName||'').tri
   try{const sn=await db.doc(`saves/${myId}`).get();if(sn.exists)remote=sn.data();}catch(e){dbError(e);}
   if(myId!==u.uid)return;
   const cands=[remote,mine,state].filter(Boolean).map(normalize);cands.sort((a,b)=>(b.asc-a.asc)||(b.seedsTotal-a.seedsTotal)||(b.ts-a.ts));
-  state=cands[0];online=true;catchUp(true);wantFocus=true;buildAll();setStatus();saveLocal();
+  state=cands[0];online=true;catchUp(true);regenStock(Date.now());checkFinds();wantFocus=true;buildAll();setStatus();saveLocal();
   unsubs.push(db.collection('garden').onSnapshot(sn=>{players=new Map();for(const d of sn.docs){if(d.exists)players.set(d.id,cleanPlant(d.id,d.data()||{}));}
     for(const [id,p] of players)names[id]=p.owner||names[id]||'';setStatus();renderCard();clanSoon();},e=>dbError(e)));
   unsubs.push(db.collection('clans').onSnapshot(sn=>{clans=new Map();for(const d of sn.docs){if(!d.exists)continue;const v=d.data()||{};
       const nm=typeof v.name==='string'?v.name.trim().slice(0,24):'';if(nm)clans.set(d.id,{name:nm,by:String(v.by||''),at:+v.at||0});}
     clansLoaded=true;clanSoon();},e=>dbError(e)));
   unsubs.push(db.collection('drops').where('to','==',myId).onSnapshot(handleDrops,e=>dbError(e)));
-  for(const g of GIFT_KEYS)unsubs.push(db.collection(GIFTS[g].col).where('to','==',myId).onSnapshot(sn=>handleGifts(g,sn),e=>dbError(e)));
+  unsubs.push(db.collection('gifts').where('to','==',myId).onSnapshot(handleIncoming,e=>dbError(e)));
+  unsubs.push(db.collection('gifts').where('from','==',myId).onSnapshot(handleSent,e=>dbError(e)));
   subscribeClan();lastPub='';publishGarden();saveRemote();}
 
 /* ---------- boot ---------- */
@@ -806,7 +943,7 @@ async function boot(){
   if(!firebaseConfig||!firebaseConfig.apiKey||String(firebaseConfig.apiKey).startsWith('PASTE')){$('#gardenNote').textContent='Fill in firebase-config.js to share a garden. For now your plant lives on this device.';return;}
   try{const[A,U,F]=await Promise.all([import(FB+'firebase-app.js'),import(FB+'firebase-auth.js'),import(FB+'firebase-firestore.js')]);
     ({initializeApp}=A);({getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,onAuthStateChanged,signOut}=U);
-    ({getFirestore,setDoc,getDoc,query,doc:fdoc,collection:fcol,where:fwhere,onSnapshot:fsnap,orderBy:forder,limit:flimit}=F);}
+    ({getFirestore,setDoc,getDoc,query,doc:fdoc,collection:fcol,where:fwhere,onSnapshot:fsnap,orderBy:forder,limit:flimit,deleteDoc:fdel}=F);}
   catch(e){console.warn('Firebase failed to load',e);$('#gardenNote').textContent='Could not reach Firebase. Your plant lives on this device until the connection works.';return;}
   const app=initializeApp(firebaseConfig);auth=getAuth(app);db=makeDb(getFirestore(app));setStatus();
   onAuthStateChanged(auth,u=>{if(u){if(myId!==u.uid)connect(u);}else{disconnect();const l=loadLocal();if(l){state=normalize(l);catchUp(false);buildAll();}}});}
