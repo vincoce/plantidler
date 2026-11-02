@@ -171,6 +171,9 @@ h1{font-family:"Bagel Fat One","Arial Black",sans-serif;font-weight:400;font-siz
 .gate[hidden],.layout[hidden]{display:none}
 .flybtn{display:block;margin-top:6px;font-size:13px}
 .flybtn:disabled{opacity:.6;cursor:default}
+.signfield select{border:2px solid var(--line);background:var(--surface2);border-radius:12px;padding:6px;font:inherit;color:inherit}
+.signfield{flex-wrap:wrap}.signfield input{min-width:160px}
+.signline{color:var(--ink)!important;font-style:italic}
 </style>
 </head>
 <body>
@@ -336,7 +339,7 @@ function cdText(ms){const m=mins(ms);return m>=60?`${Math.floor(m/60)} h${m%60?`
 function newState(){return{v:2,plantName:'Sprout',leaf:'round',flower:'daisy',stem:'spring',petal:'blush',pot:'terracotta',
   level:1,xp:0,sap:0,moisture:80,ts:Date.now(),up:{roots:0,leaves:0,res:0,bloom:0},seeds:0,seedsTotal:0,asc:0,perm:{fertile:0,rain:0,deep:0},
   owned:{leaf:START_LEAVES.slice(),flower:['daisy'],stem:['spring'],petal:['blush'],pot:['terracotta']},
-  leavesBought:0,flies:[],lastFly:{},bg:'meadow',ach:{},stats:{playSecs:0,days:0,lastDay:'',waters:0,helpersSent:0,wateredOthers:0},lastWater:{},dropSeen:{},stock:Object.fromEntries(H_KEYS.map(k=>[k,[]])),stockTs:{},found:{},visitors:[],collected:[],waterCount:0,nightWaters:0,bloomSecs:0,wetSecs:0,clan:null,best:1,tiers:[],help:{day:'',sec:0},mut:null,mutDry:0,mutSeen:[],treeGiven:{}};}
+  leavesBought:0,sign:'',signUntil:0,flies:[],lastFly:{},spider:0,wrapped:[],bg:'meadow',ach:{},stats:{playSecs:0,days:0,lastDay:'',waters:0,helpersSent:0,wateredOthers:0,fliesGot:0,fliesCaught:0},lastWater:{},dropSeen:{},stock:Object.fromEntries(H_KEYS.map(k=>[k,[]])),stockTs:{},found:{},visitors:[],collected:[],waterCount:0,nightWaters:0,bloomSecs:0,wetSecs:0,clan:null,best:1,tiers:[],help:{day:'',sec:0},mut:null,mutDry:0,mutSeen:[],treeGiven:{}};}
 function normalize(s){const d=newState();if(!s||typeof s!=='object')return d;
   const o=Object.assign(d,s);o.up=Object.assign(newState().up,s.up||{});o.perm=Object.assign(newState().perm,s.perm||{});
   o.owned=Object.assign(newState().owned,s.owned||{});for(const k of START_LEAVES)if(!o.owned.leaf.includes(k))o.owned.leaf.push(k);
@@ -344,11 +347,13 @@ function normalize(s){const d=newState();if(!s||typeof s!=='object')return d;
   for(const k of ['lastWater','dropSeen'])o[k]=(s[k]&&typeof s[k]==='object')?s[k]:{};
   const obj=v=>(v&&typeof v==='object'&&!Array.isArray(v))?v:{};o.stock={};o.stockTs=obj(s.stockTs);o.found=obj(s.found);
   for(const k of H_KEYS){const a=(s.stock||{})[k];o.stock[k]=Array.isArray(a)?a.map(Boolean).slice(0,STOCK_CAP):[];}
+  o.sign=cleanSign(s.sign);o.signUntil=isFinite(s.signUntil)?+s.signUntil:0;
   o.flies=Array.isArray(s.flies)?s.flies.filter(x=>isFinite(x)).slice(-5):[];o.lastFly=obj(s.lastFly);
   o.visitors=Array.isArray(s.visitors)?s.visitors.filter(v=>v&&has(HELPERS,v.type)&&isFinite(v.until)).slice(0,8):[];
   o.collected=Array.isArray(s.collected)?s.collected.slice(-80):[];
   for(const k of ['waterCount','nightWaters','bloomSecs','wetSecs'])o[k]=isFinite(s[k])?+s[k]:0;
-  o.ach=obj(s.ach);o.stats=Object.assign(newState().stats,obj(s.stats));for(const k of ['playSecs','days','waters','helpersSent','wateredOthers'])if(!isFinite(o.stats[k]))o.stats[k]=0;
+  o.ach=obj(s.ach);o.stats=Object.assign(newState().stats,obj(s.stats));for(const k of ['playSecs','days','waters','helpersSent','wateredOthers','fliesGot','fliesCaught'])if(!isFinite(o.stats[k]))o.stats[k]=0;
+  o.spider=isFinite(s.spider)?+s.spider:0;o.wrapped=Array.isArray(s.wrapped)?s.wrapped.filter(x=>isFinite(x)).slice(-3):[];
   if(typeof o.bg!=='string'||!has(BGS,o.bg))o.bg='meadow';
   for(const k of ['bugs','bees','worms','lastGift','giftSeen','lastBug','bugSeen','_sid','_at'])delete o[k];
   if(typeof o.clan!=='string')o.clan=null;if(!o.help||typeof o.help!=='object'||!isFinite(o.help.sec))o.help={day:'',sec:0};
@@ -409,8 +414,8 @@ function dbError(e){const c=e&&e.code;console.warn('Firestore:',e);if(c==='permi
 const saveRemote=writer(async()=>{if(!online||saveHold||passive)return;await db.doc(`saves/${myId}`).set(stamped());});
 function summary(){const now=Date.now(),r=rates(state,now);return{name:state.plantName,leaf:state.leaf,flower:state.flower,stem:state.stem,
   petal:state.petal,pot:state.pot,level:state.level,asc:state.asc,bloom:state.up.bloom,moisture:Math.round(state.moisture),mts:now,net:+(r.rain-r.drain).toFixed(5),
-  seen:document.hidden?0:now,owner:myName,clan:state.clan||'',vis:state.visitors.filter(v=>v.until>now).map(v=>({t:v.type,r:!!v.rare,u:v.until})),home:Object.fromEntries(H_KEYS.map(k=>[k,state.stock[k].map(x=>x?1:0)])),fl:(state.flies||[]).filter(e=>e>now),tiers:state.tiers.slice(-60),mut:state.mut||''};}
-const pubKey=()=>[(state.flies||[]).join(','),state.plantName,state.leaf,state.flower,state.stem,state.petal,state.pot,state.level,state.asc,state.up.bloom,state.clan,JSON.stringify(state.visitors.map(v=>v.key)),JSON.stringify(state.stock),state.tiers.length,state.mut].join('|');
+  seen:document.hidden?0:now,owner:myName,clan:state.clan||'',vis:state.visitors.filter(v=>v.until>now).map(v=>({t:v.type,r:!!v.rare,u:v.until})),home:Object.fromEntries(H_KEYS.map(k=>[k,state.stock[k].map(x=>x?1:0)])),fl:(state.flies||[]).filter(e=>e>now),sp:state.spider?1:0,wr:(state.wrapped||[]).filter(e=>e>now).length,sign:signOf(state),su:state.signUntil||0,tiers:state.tiers.slice(-60),mut:state.mut||''};}
+const pubKey=()=>[state.spider,(state.wrapped||[]).join(','),state.sign,state.signUntil,(state.flies||[]).join(','),state.plantName,state.leaf,state.flower,state.stem,state.petal,state.pot,state.level,state.asc,state.up.bloom,state.clan,JSON.stringify(state.visitors.map(v=>v.key)),JSON.stringify(state.stock),state.tiers.length,state.mut].join('|');
 let lastPub='';
 const publishGarden=writer(async()=>{if(!online||passive)return;const k=pubKey();await db.doc(`garden/${myId}`).set(summary());lastPub=k;});
 function maybePublish(){if(pubKey()!==lastPub)publishGarden();}
@@ -544,6 +549,7 @@ function drawPlant(g,P,cx,groundY,unit,t){const inv=g.getTransform().inverse();
   g.lineTo(cx+potW*0.36,groundY);g.lineTo(cx-potW*0.36,groundY);g.closePath();g.fill();
   g.fillStyle=pot.d;g.fillRect(cx-potW*0.52,potTop,potW*1.04,potH*0.2);
   g.fillStyle='rgba(255,255,255,.18)';g.fillRect(cx-potW*0.3,potTop+potH*0.3,potW*0.07,potH*0.55);
+  if(signOf(P))drawSign(g,cx+potW*0.56,groundY,signOf(P),unit,P.signMaxW||unit*0.9,!!P.hero,t,P.signRight);
   if(P.pot==='gold'){g.fillStyle='rgba(255,255,220,.55)';g.beginPath();g.arc(cx+potW*0.2,potTop+potH*0.45,potW*0.03,0,7);g.fill();}
   const wr=P.wormsR||[];for(let i=0;i<Math.min(6,wr.length);i++){const side=i%2?1:-1,x=cx+side*potW*(0.14+0.11*Math.floor(i/2)),up=0.5+0.5*Math.sin(t*0.0009+i*2.3);
     g.save();g.translate(x,potTop+1);g.beginPath();g.rect(-potW,-unit,potW*2,unit+1);g.clip();drawWorm(g,potH*0.55*up+2,Math.max(2.5,unit*0.022),t,i,wr[i]);g.restore();}
@@ -562,7 +568,37 @@ function drawFly(g,x,y,r,dir,t){g.save();g.translate(x,y);g.scale(dir,1);g.fillS
   g.beginPath();g.ellipse(-r*0.2,-r*0.8,r*0.75,r*0.38,-0.4+fl,0,7);g.ellipse(r*0.35,-r*0.75,r*0.7,r*0.35,0.3-fl,0,7);g.fill();
   g.fillStyle='#1B1D22';g.beginPath();g.ellipse(0,0,r*1.05,r*0.65,0,0,7);g.fill();g.beginPath();g.arc(r*0.95,-r*0.05,r*0.45,0,7);g.fill();
   g.fillStyle='#B3262E';g.beginPath();g.arc(r*1.15,-r*0.2,r*0.18,0,7);g.fill();g.restore();}
-function drawSkyHelpers(g,P,cx,topY,baseY,unit,t){
+/* ---------- signpost: a short note in front of the pot that everyone sees ---------- */
+const SIGN_MAX=40;
+function cleanSign(v){return String(v||'').replace(/[\u0000-\u001f\u007f]/g,'').replace(/\s+/g,' ').trim().slice(0,SIGN_MAX);}
+const signOf=p=>p.sign&&(!(p.signUntil||p.su)||(p.signUntil||p.su)>Date.now())?p.sign:'';
+function wrapLines(g,text,maxW,maxLines){const words=text.split(' '),lines=[];let cur='';
+  for(const wd of words){const t2=cur?cur+' '+wd:wd;if(g.measureText(t2).width<=maxW||!cur)cur=t2;else{lines.push(cur);cur=wd;}}if(cur)lines.push(cur);
+  if(lines.length>maxLines){lines.length=maxLines;let l=lines[maxLines-1];while(l.length>1&&g.measureText(l+'…').width>maxW)l=l.slice(0,-1);lines[maxLines-1]=l+'…';}
+  return lines.map(l=>{if(g.measureText(l).width<=maxW)return l;let x=l;while(x.length>1&&g.measureText(x+'…').width>maxW)x=x.slice(0,-1);return x+'…';});}
+function drawSign(g,x,groundY,text,unit,maxW,big,t,rightLimit){const fs=Math.round(clamp(unit*(big?0.05:0.065),9,big?16:12));g.font=`700 ${fs}px Karla, sans-serif`;
+  const pad=fs*0.55,lines=wrapLines(g,text,Math.max(30,maxW-pad*2),big?3:2),tw=Math.max(...lines.map(l=>g.measureText(l).width))*1.08,bw=tw+pad*2,bh=lines.length*fs*1.2+pad*1.3;
+  const postH=unit*(big?0.16:0.2)+bh*0.2,by=groundY-postH-bh,bx=rightLimit&&x+bw>rightLimit-4?rightLimit-4-bw:x;const sway=Math.sin(t*0.0008+x)*0.012;
+  g.save();g.translate(bx+bw*0.3,groundY);g.rotate(sway);g.translate(-(bx+bw*0.3),-groundY);
+  g.fillStyle='#6B4A2F';g.fillRect(bx+bw*0.3-fs*0.22,by+bh-2,fs*0.44,postH+2);
+  g.fillStyle='rgba(0,0,0,.15)';g.fillRect(bx+2,by+3,bw,bh);
+  const wg=g.createLinearGradient(0,by,0,by+bh);wg.addColorStop(0,'#D9A86A');wg.addColorStop(1,'#B9844A');g.fillStyle=wg;g.beginPath();if(g.roundRect)g.roundRect(bx,by,bw,bh,fs*0.3);else g.rect(bx,by,bw,bh);g.fill();
+  g.strokeStyle='rgba(90,55,25,.5)';g.lineWidth=1;g.stroke();g.strokeStyle='rgba(120,75,35,.25)';for(let yy=by+fs*0.6;yy<by+bh-2;yy+=fs*0.7){g.beginPath();g.moveTo(bx+3,yy);g.lineTo(bx+bw-3,yy);g.stroke();}
+  g.fillStyle='#3B2414';g.textAlign='left';g.textBaseline='alphabetic';lines.forEach((l,i)=>g.fillText(l,bx+pad,by+pad*0.75+fs*(i+0.9)*1.2-fs*0.2));g.restore();}
+function drawSpider(g,P,cx,topY,baseY,unit,t){if(!P.sp)return;const wx=cx-unit*0.24,wy=topY+(baseY-topY)*0.42,R=unit*0.11;
+  g.save();g.strokeStyle='rgba(255,255,255,.55)';g.lineWidth=Math.max(0.6,unit*0.003);
+  for(let i=0;i<8;i++){const a=i*Math.PI/4+0.2;g.beginPath();g.moveTo(wx,wy);g.lineTo(wx+Math.cos(a)*R,wy+Math.sin(a)*R);g.stroke();}
+  for(let r=R*0.25;r<=R;r+=R*0.25){g.beginPath();for(let i=0;i<=8;i++){const a=i*Math.PI/4+0.2;g.lineTo(wx+Math.cos(a)*r,wy+Math.sin(a)*r);}g.stroke();}
+  for(let i=0;i<(P.wr||0);i++){const a=1.1+i*1.9,x=wx+Math.cos(a)*R*0.6,y=wy+Math.sin(a)*R*0.6;g.fillStyle='rgba(245,245,240,.95)';g.beginPath();g.ellipse(x,y,unit*0.012,unit*0.019,a,0,7);g.fill();}
+  const drop=R*0.9+Math.sin(t*0.0012)*R*0.35,sx=wx,sy=wy+drop,sr=Math.max(3,unit*0.021);
+  g.beginPath();g.moveTo(wx,wy);g.lineTo(sx,sy);g.stroke();
+  g.strokeStyle='#1E1A18';g.lineWidth=Math.max(0.8,sr*0.22);for(let i=0;i<4;i++)for(const s2 of[-1,1]){const a=(-0.9+i*0.55),l=sr*1.7;
+    g.beginPath();g.moveTo(sx,sy);g.lineTo(sx+s2*Math.cos(a)*l*0.6,sy+Math.sin(a)*l*0.6-sr*0.3);g.lineTo(sx+s2*Math.cos(a)*l,sy+Math.sin(a)*l+sr*0.2+Math.sin(t*0.004+i)*sr*0.1);g.stroke();}
+  g.fillStyle='#2A2220';g.beginPath();g.ellipse(sx,sy+sr*0.3,sr*0.75,sr*0.9,0,0,7);g.fill();g.beginPath();g.arc(sx,sy-sr*0.55,sr*0.45,0,7);g.fill();
+  g.fillStyle='#C9A227';g.beginPath();g.arc(sx,sy+sr*0.3,sr*0.22,0,7);g.fill();
+  if(P.hero&&catchFx&&Date.now()-catchFx.at<700){const f=flyPos(catchFx.i,cx,topY,baseY,unit,t),k=1-(Date.now()-catchFx.at)/700;g.strokeStyle=`rgba(255,255,255,${k})`;g.lineWidth=1.5;g.beginPath();g.moveTo(sx,sy);g.lineTo(f.x,f.y);g.stroke();}
+  g.restore();}
+function drawSkyHelpers(g,P,cx,topY,baseY,unit,t){drawSpider(g,P,cx,topY,baseY,unit,t);
   const fn=Math.min(FLY_MAX,P.flyN||0);if(P.hero)heroFlyPos=[];for(let i=0;i<fn;i++){const f=flyPos(i,cx,topY,baseY,unit,t),r=Math.max(3,unit*0.019);drawFly(g,f.x,f.y,r,f.dir,t);if(P.hero)heroFlyPos.push({i,x:f.x,y:f.y,r:Math.max(16,r*4)});}
   for(let i=splats.length-1;i>=0;i--){const s2=splats[i],age=Date.now()-s2.at;if(!P.hero)break;if(age>900){splats.splice(i,1);continue;}g.globalAlpha=1-age/900;g.fillStyle='#3A2A20';
     for(let k=0;k<6;k++){const a=k*1.05;g.beginPath();g.arc(s2.x+Math.cos(a)*age*0.012*unit*0.1,s2.y+Math.sin(a)*age*0.012*unit*0.1,2,0,7);g.fill();}g.globalAlpha=1;}const ff=P.fliesR||[];const night=skyColors()[2];
@@ -581,7 +617,7 @@ function fit(cv){const r=cv.getBoundingClientRect();const dpr=Math.min(2,window.
 function skyColors(){const h=new Date().getHours()+new Date().getMinutes()/60;
   if(h>=7&&h<18)return['#6FB9EC','#CDEAF8',false,'#2C5FA0'];if((h>=18&&h<20.5)||(h>=5&&h<7))return['#E58F63','#F8D7B0',false,'#5A3F7A'];return['#14213D','#36466E',true,'#070B18'];}
 const drops=[];let shake=0,wantFocus=true;
-function myPlant(){return{id:myId||'me',hero:true,flyN:(state.flies||[]).filter(e=>e>Date.now()).length,mut:state.mut,tiers:state.tiers,leaf:state.leaf,flower:state.flower,stem:state.stem,petal:state.petal,pot:state.pot,
+function myPlant(){return{id:myId||'me',hero:true,sp:state.spider?1:0,wr:(state.wrapped||[]).filter(e=>e>Date.now()).length,sign:signOf(state),su:state.signUntil,flyN:(state.flies||[]).filter(e=>e>Date.now()).length,mut:state.mut,tiers:state.tiers,leaf:state.leaf,flower:state.flower,stem:state.stem,petal:state.petal,pot:state.pot,
   level:state.level,asc:state.asc,bloom:state.up.bloom,moisture:state.moisture,...helperLooks(state.visitors.filter(v=>v.until>Date.now()).map(v=>({t:v.type,r:!!v.rare})),Object.fromEntries(H_KEYS.map(k=>[k,state.stock[k]])),true),clan:state.clan||'',name:state.plantName};}
 /* turn visitors + helpers living at home into what drawPlant shows */
 function helperLooks(vis,home,asBool){const by=k=>vis.filter(v=>v.t===k).map(v=>!!v.r).concat(((home||{})[k]||[]).map(x=>!!x));
@@ -686,6 +722,7 @@ const ACH=[
   {k:'days30',name:'Seasons pass',desc:'Play on 30 different days',v:s=>s.stats.days,goal:30,unit:'days',bg:'snow'},
   {k:'asc10',name:'Skyward',desc:'Ascend 10 times',v:s=>s.asc,goal:10,bg:'island'},
   {k:'leaves',name:'Collector',desc:'Unlock every leaf type',v:s=>s.owned.leaf.length,goal:Object.keys(LEAVES).length},
+  {k:'spider10',name:'Web master',desc:'Let your spider catch 10 flies',v:s=>s.stats.fliesCaught,goal:10},
   {k:'play200',name:'Ancient roots',desc:'Play for 200 hours',v:s=>s.stats.playSecs/3600,goal:200,unit:'h',bg:'space'}];
 const bgUnlocked=k=>k==='meadow'||ACH.some(a=>a.bg===k&&state.ach[a.k]);
 function checkAch(){let any=false;for(const a of ACH){if(state.ach[a.k]||a.v(state)<a.goal)continue;state.ach[a.k]=Date.now();any=true;
@@ -721,7 +758,7 @@ function drawHero(t){const sc=$('#heroScroll'),cv=$('#hero');const{g,w,h}=fit(cv
   const gy=L.groundY-6;drawScene(sc2,B,skyD,'ground');
   const sx=shake>0?Math.sin(t*0.08)*shake*3:0;shake=Math.max(0,shake-0.03);
   const tip=tipsyUntil>Date.now()?Math.min(1,(tipsyUntil-Date.now())/20000):0;if(tip){g.save();g.translate(w/2,L.groundY);g.rotate(Math.sin(t*0.0025)*0.05*tip);g.translate(-w/2,-L.groundY);}
-  drawPlant(g,L.P,w/2+sx,L.groundY,L.unit,t);if(tip)g.restore();drawScene(sc2,B,skyD,'front');
+  L.P.signMaxW=Math.min(w*0.4,260);L.P.signRight=w;drawPlant(g,L.P,w/2+sx,L.groundY,L.unit,t);if(tip)g.restore();drawScene(sc2,B,skyD,'front');
   for(let i=drops.length-1;i>=0;i--){const d=drops[i];d.y+=d.v;d.v+=0.25;g.fillStyle='rgba(120,180,240,.85)';g.beginPath();g.ellipse(d.x,d.y,2.2,4.5,0,0,7);g.fill();if(d.y>Math.min(gy,sy+h+10))drops.splice(i,1);}
   g.restore();
   // sky ornaments fixed to the view
@@ -752,7 +789,7 @@ function drawGarden(t){const cv=$('#garden');const list=gardenList();const W=cv.
   list.forEach((p,i)=>{const x=(i%cols)*cw,y=Math.floor(i/cols)*ch,gy=y+ch-36;gardenCells.push({x,y,w:cw,h:ch,id:p.id});
     g.fillStyle=C.soil;g.beginPath();g.ellipse(x+cw/2,gy+2,cw*0.42,9,0,0,7);g.fill();
     if(selected===p.id){g.strokeStyle=C.accent;g.lineWidth=3;g.beginPath();if(g.roundRect)g.roundRect(x+5,y+5,cw-10,ch-10,14);else g.rect(x+5,y+5,cw-10,ch-10);g.stroke();}
-    drawPlant(g,p,x+cw/2,gy,Math.min(ch*0.66/stackH(p),cw*0.85),t);
+    p.signMaxW=cw*0.44;p.signRight=x+cw;drawPlant(g,p,x+cw/2,gy,Math.min(ch*0.66/stackH(p),cw*0.85),t);
     g.textAlign='center';g.fillStyle=C.ink;g.font='700 13px Karla, sans-serif';g.fillText((p.name||'Plant').slice(0,16),x+cw/2,y+ch-16);
     g.fillStyle=C.muted;g.font='500 12px Karla, sans-serif';g.fillText(`Lv ${p.level}${p.asc?'  ✦'+p.asc:''}`,x+cw/2,y+ch-2);
     if(p.clan&&clans.has(p.clan)){const tag=clans.get(p.clan).name.slice(0,12);g.font='700 11px Karla, sans-serif';const tw=g.measureText(tag).width+12;
@@ -765,7 +802,7 @@ function cleanPlant(id,d){const s=v=>typeof v==='string'?v:'';const pick=(o,k,de
   return{id,name:s(d.name).slice(0,18)||'Plant',leaf:pick(LEAVES,d.leaf,'round'),flower:pick(FLOWERS,d.flower,'daisy'),
     stem:pick(STEMS,d.stem,'spring'),petal:pick(PETALS,d.petal,'blush'),pot:pick(POTS,d.pot,'terracotta'),level:Math.floor(clamp(+d.level||1,1,9999)),
     asc:Math.floor(clamp(+d.asc||0,0,999)),bloom:Math.floor(clamp(+d.bloom||0,0,999)),moisture:clamp(+d.moisture||0,0,100),mts:+d.mts||Date.now(),
-    net:clamp(+d.net||-0.05,-1,1),seen:+d.seen||0,owner:s(d.owner).slice(0,30),clan:s(d.clan).slice(0,40),fl:numArr(d.fl,FLY_MAX),vis:Array.isArray(d.vis)?d.vis.filter(v=>v&&has(HELPERS,v.t)&&isFinite(v.u)).slice(0,8).map(v=>({t:v.t,r:!!v.r,u:+v.u})):[],home:Object.fromEntries(H_KEYS.map(k=>[k,(Array.isArray((d.home||{})[k])?d.home[k]:[]).slice(0,STOCK_CAP).map(Boolean)])),tiers:Array.isArray(d.tiers)?d.tiers.slice(-60).map(cleanTier):[],mut:has(MUTS,d.mut)?d.mut:null};}
+    net:clamp(+d.net||-0.05,-1,1),seen:+d.seen||0,owner:s(d.owner).slice(0,30),clan:s(d.clan).slice(0,40),fl:numArr(d.fl,FLY_MAX),sp:d.sp?1:0,wr:clamp(+d.wr||0,0,3)|0,sign:cleanSign(d.sign),su:isFinite(d.su)?+d.su:0,vis:Array.isArray(d.vis)?d.vis.filter(v=>v&&has(HELPERS,v.t)&&isFinite(v.u)).slice(0,8).map(v=>({t:v.t,r:!!v.r,u:+v.u})):[],home:Object.fromEntries(H_KEYS.map(k=>[k,(Array.isArray((d.home||{})[k])?d.home[k]:[]).slice(0,STOCK_CAP).map(Boolean)])),tiers:Array.isArray(d.tiers)?d.tiers.slice(-60).map(cleanTier):[],mut:has(MUTS,d.mut)?d.mut:null};}
 const numArr=(a,n)=>Array.isArray(a)?a.filter(x=>isFinite(x)).slice(0,n).map(Number):[];
 function giftList(p){const vis=p.visNow||(p.id===(myId||'me')?state.visitors.filter(v=>v.until>Date.now()).map(v=>({t:v.type})):[]);const out=[];
   for(const k of H_KEYS){const n=vis.filter(v=>v.t===k).length;if(n)out.push(`${n} ${n>1?HELPERS[k].plural:HELPERS[k].name.toLowerCase()}`);}return out.length?`visited by ${out.join(', ')}`:'';}
@@ -786,7 +823,7 @@ function renderCard(){const card=$('#gcard');if(!selected){card.hidden=true;retu
   if(selected===(myId||'me')){card.innerHTML=`<div class="txt"><b>${esc(state.plantName)}</b><p>This is your plant. Friends can water it, and clan mates can send it helpers once they’ve found some.</p></div>`;return;}
   const p=allPlants().find(x=>x.id===selected);if(!p){card.hidden=true;return;}
   const owner=names[p.id]||'Someone',cd=(state.lastWater[p.id]||0)+WATER_CD-Date.now(),cl=p.clan&&clans.get(p.clan);const mate=state.clan&&p.clan===state.clan;
-  card.innerHTML=`<div class="txt"><b>${esc(p.name)}</b><p>Grown by ${esc(owner)}${cl?` in ${esc(cl.name)}`:''}. Level ${p.level}, ${esc(LEAVES[p.leaf].name.toLowerCase())} leaves${p.asc?`, ascended ${p.asc}×`:''}. Soil ${Math.round(p.moisture)}%${giftList(p)?`, ${giftList(p)}`:''}.${isActive(p)?' <span class="on">● Active now</span>':''}</p>${mate?giftButtons(p.id):''}${flyButton(p.id)}</div>
+  card.innerHTML=`<div class="txt"><b>${esc(p.name)}</b>${signOf(p)?`<p class="signline">“${esc(signOf(p))}”</p>`:''}<p>Grown by ${esc(owner)}${cl?` in ${esc(cl.name)}`:''}. Level ${p.level}, ${esc(LEAVES[p.leaf].name.toLowerCase())} leaves${p.asc?`, ascended ${p.asc}×`:''}. Soil ${Math.round(p.moisture)}%${giftList(p)?`, ${giftList(p)}`:''}.${isActive(p)?' <span class="on">● Active now</span>':''}</p>${mate?giftButtons(p.id):''}${flyButton(p.id)}</div>
     <div style="display:grid;gap:6px"><button class="buy ${cd<=0?'go':''}" id="waterOther" ${cd>0||!online?'disabled':''}>${cd>0?`Water in ${cdText(cd)}`:'Water it'}</button></div>`;buildIcons();}
 function flyButton(id){const cd=(state.lastFly[id]||0)+FLY_CD-Date.now();return`<button class="linkish flybtn" data-fly="${esc(id)}" ${cd>0||!online?'disabled':''}>${cd>0?`Next fly in ${mins(cd)} min`:'Send a fly (−1 sap, just for fun)'}</button>`;}
 async function sendFly(to){if(!online||!to||to===myId||passive)return;const p=players.get(to);if(!p)return;if(Date.now()-(state.lastFly[to]||0)<FLY_CD)return;
@@ -794,12 +831,19 @@ async function sendFly(to){if(!online||!to||to===myId||passive)return;const p=pl
   const at=Date.now();state.lastFly[to]=at;for(const[k,t]of Object.entries(state.lastFly))if(at-t>FLY_CD)delete state.lastFly[k];saveSoon();renderCard();refreshClanButtons();
   try{await db.doc(`flies/${to}__${myId}__${at}`).set({to,from:myId,name:myName||state.plantName,at});toast(`You sent ${p.name} a fly. Bzz.`);}catch(e){delete state.lastFly[to];dbError(e);}}
 const seenFlies=new Set();
+/* the spider moves in after 5 flies and now and then catches one: the fly is gone and you get your sap back */
+const SPIDER_AFTER=5,SPIDER_CATCH_S=25*60;let catchFx=null;
+function checkSpider(){if(!state.spider&&state.stats.fliesGot>=SPIDER_AFTER){state.spider=Date.now();toast('All those flies attracted a spider. It spun a web on your plant and will catch flies now and then.');saveSoon();maybePublish();}}
+function spiderHunt(dt){if(!state.spider||passive||!online)return;const now=Date.now();let act=state.flies.filter(e=>e>now);if(!act.length)return;
+  const p=1-Math.exp(-dt*act.length/SPIDER_CATCH_S);if(Math.random()>=p)return;
+  act.sort((a,b)=>a-b);act.shift();state.flies=act;state.sap+=1;state.stats.fliesCaught++;state.wrapped=(state.wrapped||[]).filter(e=>e>now).concat(now+2*3600*1000).slice(-3);
+  catchFx={at:now,i:act.length};toast('Your spider caught a fly. You got your sap back.');saveSoon();maybePublish();}
 function handleFlies(sn){if(passive||!online)return;const now=Date.now();let changed=false;
   for(const d of sn.docs){if(!d.exists||seenFlies.has(d.id))continue;const v=d.data()||{};if(v.to!==myId)continue;seenFlies.add(d.id);const who=names[v.from]||v.name||'Someone';
     const act=state.flies.filter(e=>e>now);
-    if(act.length<FLY_MAX&&now-(+v.at||0)<FLY_MS){act.push(now+FLY_MS);state.flies=act;state.sap=Math.max(0,state.sap-1);changed=true;toast(`${who} sent you a fly. −1 sap. Tap it to swat it.`);}
+    if(act.length<FLY_MAX&&now-(+v.at||0)<FLY_MS){act.push(now+FLY_MS);state.flies=act;state.sap=Math.max(0,state.sap-1);changed=true;state.stats.fliesGot++;toast(`${who} sent you a fly. −1 sap. Tap it to swat it.`);}
     db.doc(`flies/${d.id}`).del().catch(()=>{});}
-  if(changed){saveSoon();maybePublish();}}
+  if(changed){checkSpider();saveSoon();maybePublish();}}
 function nameOf(id){const p=players.get(id);return p?p.name:'a plant';}
 async function waterOther(){const id=selected;if(!online||!id||id===myId)return;if(Date.now()-(state.lastWater[id]||0)<WATER_CD)return;
   state.lastWater[id]=Date.now();const rw=helpReward(10);
@@ -1050,6 +1094,11 @@ function buildGrow(){let h=`<h2>Feed your plant</h2><p class="note" id="rateNote
       <button class="buy" data-buy="${k}" ${max?'disabled':''}>${max?'Maxed':`<span class="sap">${fmt(upCost(k))}</span> sap`}</button></div>`;}
   $('#p-grow').innerHTML=h;}
 function buildLook(){let h=`<h2>Name</h2><div class="namefield"><input id="nameIn" maxlength="18" value="${esc(state.plantName)}" aria-label="Plant name"></div>
+  <h2>Signpost</h2><p class="note">A short note in front of your pot that everyone sees in the garden.</p>
+  <div class="namefield signfield"><input id="signIn" maxlength="${SIGN_MAX}" placeholder="Out caving until Sunday" value="${esc(state.sign)}" aria-label="Signpost text">
+    <select id="signFor" aria-label="How long the sign stays up"><option value="1">1 day</option><option value="3">3 days</option><option value="7" selected>1 week</option><option value="0">Always</option></select>
+    <button class="buy go" id="signSave">Put up</button></div>
+  ${signOf(state)?`<p class="note">Up now${state.signUntil?` until ${new Date(state.signUntil).toLocaleDateString([],{weekday:'long',month:'short',day:'numeric'})}`:''}. <button class="linkish" id="signClear">Take it down</button></p>`:''}
   <h2>Leaves</h2><p class="note">Pick which leaves your plant grows. Changes apply to the section that is growing now; rested sections keep their look. New leaf types cost sap and stay yours after ascending. Rarer leaves open up as you ascend.</p><div class="letters">`;
   for(const k in LEAVES){const own=state.owned.leaf.includes(k);
     const L=LEAVES[k],gated=!own&&state.asc<L.life;
@@ -1102,7 +1151,7 @@ function ascend(){if(state.level<ascAt())return;if(Date.now()-ascArm>4000){ascAr
 function buildAll(){buildGrow();buildLook();buildAscend();buildClan();refresh();}
 function refresh(){const now=Date.now(),r=rates(state,now),n=need(state.level),mp=myPlant(),gl=giftList({id:myId||'me'});
   $('#pname').textContent=state.plantName;
-  $('#stageName').textContent=`${stageName(state.level)}${state.mut?`, ${MUTS[state.mut].name.toLowerCase()}`:''}${gl?`, ${gl}`:''}${(state.flies||[]).filter(e=>e>now).length?`, ${state.flies.filter(e=>e>now).length} fl${state.flies.filter(e=>e>now).length>1?'ies':'y'} buzzing (tap to swat)`:''}${sunFactor(now)<1?', resting for the night':''}`;
+  $('#stageName').textContent=`${stageName(state.level)}${state.mut?`, ${MUTS[state.mut].name.toLowerCase()}`:''}${gl?`, ${gl}`:''}${state.spider?', a spider in its web':''}${(state.flies||[]).filter(e=>e>now).length?`, ${state.flies.filter(e=>e>now).length} fl${state.flies.filter(e=>e>now).length>1?'ies':'y'} buzzing (tap to swat)`:''}${sunFactor(now)<1?', resting for the night':''}`;
   $('#sLevel').textContent=state.level;$('#sXpRate').textContent=`${fmt(r.xp*3600)} growth/h`;
   $('#sSap').textContent=fmt(state.sap);$('#sSapRate').textContent=`+${fmt(r.sap*3600)}/h`;
   $('#sSeeds').textContent=state.seeds;$('#sAsc').textContent=state.asc?`Ascended ${state.asc}×`:'Not ascended';
@@ -1130,6 +1179,9 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
   if(b.dataset.join)return joinClan(b.dataset.join);
   if(b.dataset.gift)return sendGift(b.dataset.gift,b.dataset.to);
   if(b.dataset.fly)return sendFly(b.dataset.fly);
+  if(b.id==='signSave'){const t2=cleanSign($('#signIn').value),days=+$('#signFor').value;if(!t2){toast('Write something on the sign first.');return;}
+    state.sign=t2;state.signUntil=days?Date.now()+days*86400000:0;saveSoon();maybePublish();buildLook();toast('Your sign is up.');return;}
+  if(b.id==='signClear'){state.sign='';state.signUntil=0;saveSoon();maybePublish();buildLook();toast('You took your sign down.');return;}
   if(b.dataset.recall)return recallGift(b.dataset.recall);
   if(b.dataset.home)return sendHome(b.dataset.home);
   if(b.dataset.gfilter){gFilter=b.dataset.gfilter;if(gFilter==='clan'&&!state.clan)toast('Join a clan in the Clan tab first.');
@@ -1148,7 +1200,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
       state.seeds-=it.cost;state.owned[cat].push(k);}
     state[cat]=k;buildLook();refresh();saveSoon();maybePublish();}});
 document.addEventListener('change',e=>{if(e.target.id==='nameIn'&&passive){e.target.value=state.plantName;return;}if(e.target.id==='nameIn'){state.plantName=e.target.value.trim().slice(0,18)||'Sprout';e.target.value=state.plantName;refresh();saveSoon();maybePublish();}});
-document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='clanName')createClan();if(e.key==='Enter'&&e.target.id==='chatIn'){e.preventDefault();sendChat();}});
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='signIn'){e.preventDefault();$('#signSave').click();}if(e.key==='Enter'&&e.target.id==='clanName')createClan();if(e.key==='Enter'&&e.target.id==='chatIn'){e.preventDefault();sendChat();}});
 $('#hero').addEventListener('click',e=>{const r=e.currentTarget.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top+$('#heroScroll').scrollTop;
   const hit=heroFlyPos.find(f=>Math.hypot(f.x-x,f.y-y)<f.r);if(hit){swatFly(hit);return;}water();});
 function swatFly(f){if(passive)return toast('Tap “Play here” to play in this tab.');const now=Date.now();const act=state.flies.filter(e=>e>now).sort((a,b)=>a-b);if(!act.length)return;
@@ -1163,7 +1215,7 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{garden
 let lastHelperTick=Date.now(),lastRemote=Date.now(),lastPubBeat=Date.now(),lastLocal=Date.now(),lastCard=0;
 function tick(){const now=Date.now();let dt=(now-state.ts)/1000;if(dt>30){catchUp(true);}else if(dt>0){const ups=step(state,dt,now);state.ts=now;
     if(ups){toast(`${state.plantName} reached level ${state.level}.`);buildGrow();buildAscend();maybePublish();}}
-  if(now-lastHelperTick>5000){trackPlay((now-lastHelperTick)/1000);lastHelperTick=now;checkAch();regenStock(now);checkFinds();if(state.visitors.some(v=>v.until<=now))processIncoming();}
+  if(now-lastHelperTick>5000){spiderHunt((now-lastHelperTick)/1000);trackPlay((now-lastHelperTick)/1000);lastHelperTick=now;checkAch();regenStock(now);checkFinds();if(state.visitors.some(v=>v.until<=now))processIncoming();}
   refresh();if(now-lastLocal>5000){lastLocal=now;saveLocal();}
   if(now-lastRemote>60000){lastRemote=now;saveRemote();}
   if(now-lastPubBeat>120000){lastPubBeat=now;publishGarden();}
