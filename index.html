@@ -169,6 +169,8 @@ h1{font-family:"Bagel Fat One","Arial Black",sans-serif;font-weight:400;font-siz
 .gate p{color:var(--muted);margin:0 0 16px}
 .gate .buy{font-size:17px;padding:12px 20px}
 .gate[hidden],.layout[hidden]{display:none}
+.flybtn{display:block;margin-top:6px;font-size:13px}
+.flybtn:disabled{opacity:.6;cursor:default}
 </style>
 </head>
 <body>
@@ -334,7 +336,7 @@ function cdText(ms){const m=mins(ms);return m>=60?`${Math.floor(m/60)} h${m%60?`
 function newState(){return{v:2,plantName:'Sprout',leaf:'round',flower:'daisy',stem:'spring',petal:'blush',pot:'terracotta',
   level:1,xp:0,sap:0,moisture:80,ts:Date.now(),up:{roots:0,leaves:0,res:0,bloom:0},seeds:0,seedsTotal:0,asc:0,perm:{fertile:0,rain:0,deep:0},
   owned:{leaf:START_LEAVES.slice(),flower:['daisy'],stem:['spring'],petal:['blush'],pot:['terracotta']},
-  leavesBought:0,bg:'meadow',ach:{},stats:{playSecs:0,days:0,lastDay:'',waters:0,helpersSent:0,wateredOthers:0},lastWater:{},dropSeen:{},stock:Object.fromEntries(H_KEYS.map(k=>[k,[]])),stockTs:{},found:{},visitors:[],collected:[],waterCount:0,nightWaters:0,bloomSecs:0,wetSecs:0,clan:null,best:1,tiers:[],help:{day:'',sec:0},mut:null,mutDry:0,mutSeen:[],treeGiven:{}};}
+  leavesBought:0,flies:[],lastFly:{},bg:'meadow',ach:{},stats:{playSecs:0,days:0,lastDay:'',waters:0,helpersSent:0,wateredOthers:0},lastWater:{},dropSeen:{},stock:Object.fromEntries(H_KEYS.map(k=>[k,[]])),stockTs:{},found:{},visitors:[],collected:[],waterCount:0,nightWaters:0,bloomSecs:0,wetSecs:0,clan:null,best:1,tiers:[],help:{day:'',sec:0},mut:null,mutDry:0,mutSeen:[],treeGiven:{}};}
 function normalize(s){const d=newState();if(!s||typeof s!=='object')return d;
   const o=Object.assign(d,s);o.up=Object.assign(newState().up,s.up||{});o.perm=Object.assign(newState().perm,s.perm||{});
   o.owned=Object.assign(newState().owned,s.owned||{});for(const k of START_LEAVES)if(!o.owned.leaf.includes(k))o.owned.leaf.push(k);
@@ -342,6 +344,7 @@ function normalize(s){const d=newState();if(!s||typeof s!=='object')return d;
   for(const k of ['lastWater','dropSeen'])o[k]=(s[k]&&typeof s[k]==='object')?s[k]:{};
   const obj=v=>(v&&typeof v==='object'&&!Array.isArray(v))?v:{};o.stock={};o.stockTs=obj(s.stockTs);o.found=obj(s.found);
   for(const k of H_KEYS){const a=(s.stock||{})[k];o.stock[k]=Array.isArray(a)?a.map(Boolean).slice(0,STOCK_CAP):[];}
+  o.flies=Array.isArray(s.flies)?s.flies.filter(x=>isFinite(x)).slice(-5):[];o.lastFly=obj(s.lastFly);
   o.visitors=Array.isArray(s.visitors)?s.visitors.filter(v=>v&&has(HELPERS,v.type)&&isFinite(v.until)).slice(0,8):[];
   o.collected=Array.isArray(s.collected)?s.collected.slice(-80):[];
   for(const k of ['waterCount','nightWaters','bloomSecs','wetSecs'])o[k]=isFinite(s[k])?+s[k]:0;
@@ -406,8 +409,8 @@ function dbError(e){const c=e&&e.code;console.warn('Firestore:',e);if(c==='permi
 const saveRemote=writer(async()=>{if(!online||saveHold||passive)return;await db.doc(`saves/${myId}`).set(stamped());});
 function summary(){const now=Date.now(),r=rates(state,now);return{name:state.plantName,leaf:state.leaf,flower:state.flower,stem:state.stem,
   petal:state.petal,pot:state.pot,level:state.level,asc:state.asc,bloom:state.up.bloom,moisture:Math.round(state.moisture),mts:now,net:+(r.rain-r.drain).toFixed(5),
-  seen:document.hidden?0:now,owner:myName,clan:state.clan||'',vis:state.visitors.filter(v=>v.until>now).map(v=>({t:v.type,r:!!v.rare,u:v.until})),home:Object.fromEntries(H_KEYS.map(k=>[k,state.stock[k].map(x=>x?1:0)])),tiers:state.tiers.slice(-60),mut:state.mut||''};}
-const pubKey=()=>[state.plantName,state.leaf,state.flower,state.stem,state.petal,state.pot,state.level,state.asc,state.up.bloom,state.clan,JSON.stringify(state.visitors.map(v=>v.key)),JSON.stringify(state.stock),state.tiers.length,state.mut].join('|');
+  seen:document.hidden?0:now,owner:myName,clan:state.clan||'',vis:state.visitors.filter(v=>v.until>now).map(v=>({t:v.type,r:!!v.rare,u:v.until})),home:Object.fromEntries(H_KEYS.map(k=>[k,state.stock[k].map(x=>x?1:0)])),fl:(state.flies||[]).filter(e=>e>now),tiers:state.tiers.slice(-60),mut:state.mut||''};}
+const pubKey=()=>[(state.flies||[]).join(','),state.plantName,state.leaf,state.flower,state.stem,state.petal,state.pot,state.level,state.asc,state.up.bloom,state.clan,JSON.stringify(state.visitors.map(v=>v.key)),JSON.stringify(state.stock),state.tiers.length,state.mut].join('|');
 let lastPub='';
 const publishGarden=writer(async()=>{if(!online||passive)return;const k=pubKey();await db.doc(`garden/${myId}`).set(summary());lastPub=k;});
 function maybePublish(){if(pubKey()!==lastPub)publishGarden();}
@@ -551,7 +554,18 @@ function drawPlant(g,P,cx,groundY,unit,t){const inv=g.getTransform().inverse();
   return top;}
 
 /* fireflies around the plant and a rain cloud above it */
-function drawSkyHelpers(g,P,cx,topY,baseY,unit,t){const ff=P.fliesR||[];const night=skyColors()[2];
+/* flies: a harmless prank. Each costs the receiver 1 sap; at most 5 buzz around a plant for an hour. Tap one on your plant to swat it. */
+const FLY_MAX=5,FLY_MS=60*60*1000,FLY_CD=5*60*1000;let heroFlyPos=[],splats=[];
+function flyPos(i,cx,topY,baseY,unit,t){const a=t*0.0016*(1+i*0.23)+i*2.1;return{x:cx+Math.sin(a*1.7+i)*unit*0.32+Math.sin(t*0.011+i*5)*unit*0.03,
+  y:topY+(baseY-topY)*(0.25+0.4*(0.5+0.5*Math.sin(a*1.1+i*1.3)))+Math.cos(t*0.013+i*3)*unit*0.03,dir:Math.cos(a*1.7+i)>0?1:-1};}
+function drawFly(g,x,y,r,dir,t){g.save();g.translate(x,y);g.scale(dir,1);g.fillStyle='rgba(220,230,240,.7)';const fl=Math.sin(t*0.09)*0.5;
+  g.beginPath();g.ellipse(-r*0.2,-r*0.8,r*0.75,r*0.38,-0.4+fl,0,7);g.ellipse(r*0.35,-r*0.75,r*0.7,r*0.35,0.3-fl,0,7);g.fill();
+  g.fillStyle='#1B1D22';g.beginPath();g.ellipse(0,0,r*1.05,r*0.65,0,0,7);g.fill();g.beginPath();g.arc(r*0.95,-r*0.05,r*0.45,0,7);g.fill();
+  g.fillStyle='#B3262E';g.beginPath();g.arc(r*1.15,-r*0.2,r*0.18,0,7);g.fill();g.restore();}
+function drawSkyHelpers(g,P,cx,topY,baseY,unit,t){
+  const fn=Math.min(FLY_MAX,P.flyN||0);if(P.hero)heroFlyPos=[];for(let i=0;i<fn;i++){const f=flyPos(i,cx,topY,baseY,unit,t),r=Math.max(3,unit*0.019);drawFly(g,f.x,f.y,r,f.dir,t);if(P.hero)heroFlyPos.push({i,x:f.x,y:f.y,r:Math.max(16,r*4)});}
+  for(let i=splats.length-1;i>=0;i--){const s2=splats[i],age=Date.now()-s2.at;if(!P.hero)break;if(age>900){splats.splice(i,1);continue;}g.globalAlpha=1-age/900;g.fillStyle='#3A2A20';
+    for(let k=0;k<6;k++){const a=k*1.05;g.beginPath();g.arc(s2.x+Math.cos(a)*age*0.012*unit*0.1,s2.y+Math.sin(a)*age*0.012*unit*0.1,2,0,7);g.fill();}g.globalAlpha=1;}const ff=P.fliesR||[];const night=skyColors()[2];
   for(let i=0;i<Math.min(8,ff.length*3);i++){const r=ff[i%ff.length],a=t*0.0004*(1+i%3*0.3)+i*1.7,x=cx+Math.sin(a*1.3+i)*unit*0.35,y=topY+(baseY-topY)*(0.2+0.5*(0.5+0.5*Math.sin(a+i*2)));
     const glow=(night?0.9:0.55)*(0.5+0.5*Math.sin(t*0.004+i*1.9)),rad=Math.max(2,unit*0.012)*(r?1.4:1);const col=r?'150,200,255':'220,255,120';
     const gr=g.createRadialGradient(x,y,0,x,y,rad*5);gr.addColorStop(0,`rgba(${col},${glow})`);gr.addColorStop(1,`rgba(${col},0)`);g.fillStyle=gr;g.beginPath();g.arc(x,y,rad*5,0,7);g.fill();
@@ -567,7 +581,7 @@ function fit(cv){const r=cv.getBoundingClientRect();const dpr=Math.min(2,window.
 function skyColors(){const h=new Date().getHours()+new Date().getMinutes()/60;
   if(h>=7&&h<18)return['#6FB9EC','#CDEAF8',false,'#2C5FA0'];if((h>=18&&h<20.5)||(h>=5&&h<7))return['#E58F63','#F8D7B0',false,'#5A3F7A'];return['#14213D','#36466E',true,'#070B18'];}
 const drops=[];let shake=0,wantFocus=true;
-function myPlant(){return{id:myId||'me',mut:state.mut,tiers:state.tiers,leaf:state.leaf,flower:state.flower,stem:state.stem,petal:state.petal,pot:state.pot,
+function myPlant(){return{id:myId||'me',hero:true,flyN:(state.flies||[]).filter(e=>e>Date.now()).length,mut:state.mut,tiers:state.tiers,leaf:state.leaf,flower:state.flower,stem:state.stem,petal:state.petal,pot:state.pot,
   level:state.level,asc:state.asc,bloom:state.up.bloom,moisture:state.moisture,...helperLooks(state.visitors.filter(v=>v.until>Date.now()).map(v=>({t:v.type,r:!!v.rare})),Object.fromEntries(H_KEYS.map(k=>[k,state.stock[k]])),true),clan:state.clan||'',name:state.plantName};}
 /* turn visitors + helpers living at home into what drawPlant shows */
 function helperLooks(vis,home,asBool){const by=k=>vis.filter(v=>v.t===k).map(v=>!!v.r).concat(((home||{})[k]||[]).map(x=>!!x));
@@ -725,7 +739,7 @@ function readColors(){const cs=getComputedStyle(document.documentElement);const 
   gardenColors={ink:v('--ink'),muted:v('--muted'),g1:v('--grass1'),g2:v('--grass2'),soil:v('--soil'),accent:v('--accent')};}
 function allPlants(){const now=Date.now();const list=[myPlant()];
   for(const p of players.values()){if(p.id===myId)continue;const m=clamp(p.moisture+p.net*(now-p.mts)/1000,0,100);
-    const vis=p.vis.filter(v=>v.u>now);list.push(Object.assign({},p,{moisture:m,visNow:vis},helperLooks(vis,p.home)));}return list;}
+    const vis=p.vis.filter(v=>v.u>now);list.push(Object.assign({},p,{moisture:m,visNow:vis,flyN:p.fl.filter(e=>e>now).length},helperLooks(vis,p.home)));}return list;}
 function gardenList(){const me=myId||'me';let list=allPlants();if(gFilter==='clan'&&state.clan)list=list.filter(p=>p.clan===state.clan);
   list.sort((a,b)=>a.id===me?-1:b.id===me?1:b.level-a.level);return list;}
 function clanColor(id){return CLAN_COLORS[hashStr(id)%CLAN_COLORS.length];}
@@ -751,7 +765,7 @@ function cleanPlant(id,d){const s=v=>typeof v==='string'?v:'';const pick=(o,k,de
   return{id,name:s(d.name).slice(0,18)||'Plant',leaf:pick(LEAVES,d.leaf,'round'),flower:pick(FLOWERS,d.flower,'daisy'),
     stem:pick(STEMS,d.stem,'spring'),petal:pick(PETALS,d.petal,'blush'),pot:pick(POTS,d.pot,'terracotta'),level:Math.floor(clamp(+d.level||1,1,9999)),
     asc:Math.floor(clamp(+d.asc||0,0,999)),bloom:Math.floor(clamp(+d.bloom||0,0,999)),moisture:clamp(+d.moisture||0,0,100),mts:+d.mts||Date.now(),
-    net:clamp(+d.net||-0.05,-1,1),seen:+d.seen||0,owner:s(d.owner).slice(0,30),clan:s(d.clan).slice(0,40),vis:Array.isArray(d.vis)?d.vis.filter(v=>v&&has(HELPERS,v.t)&&isFinite(v.u)).slice(0,8).map(v=>({t:v.t,r:!!v.r,u:+v.u})):[],home:Object.fromEntries(H_KEYS.map(k=>[k,(Array.isArray((d.home||{})[k])?d.home[k]:[]).slice(0,STOCK_CAP).map(Boolean)])),tiers:Array.isArray(d.tiers)?d.tiers.slice(-60).map(cleanTier):[],mut:has(MUTS,d.mut)?d.mut:null};}
+    net:clamp(+d.net||-0.05,-1,1),seen:+d.seen||0,owner:s(d.owner).slice(0,30),clan:s(d.clan).slice(0,40),fl:numArr(d.fl,FLY_MAX),vis:Array.isArray(d.vis)?d.vis.filter(v=>v&&has(HELPERS,v.t)&&isFinite(v.u)).slice(0,8).map(v=>({t:v.t,r:!!v.r,u:+v.u})):[],home:Object.fromEntries(H_KEYS.map(k=>[k,(Array.isArray((d.home||{})[k])?d.home[k]:[]).slice(0,STOCK_CAP).map(Boolean)])),tiers:Array.isArray(d.tiers)?d.tiers.slice(-60).map(cleanTier):[],mut:has(MUTS,d.mut)?d.mut:null};}
 const numArr=(a,n)=>Array.isArray(a)?a.filter(x=>isFinite(x)).slice(0,n).map(Number):[];
 function giftList(p){const vis=p.visNow||(p.id===(myId||'me')?state.visitors.filter(v=>v.until>Date.now()).map(v=>({t:v.type})):[]);const out=[];
   for(const k of H_KEYS){const n=vis.filter(v=>v.t===k).length;if(n)out.push(`${n} ${n>1?HELPERS[k].plural:HELPERS[k].name.toLowerCase()}`);}return out.length?`visited by ${out.join(', ')}`:'';}
@@ -772,8 +786,20 @@ function renderCard(){const card=$('#gcard');if(!selected){card.hidden=true;retu
   if(selected===(myId||'me')){card.innerHTML=`<div class="txt"><b>${esc(state.plantName)}</b><p>This is your plant. Friends can water it, and clan mates can send it helpers once they’ve found some.</p></div>`;return;}
   const p=allPlants().find(x=>x.id===selected);if(!p){card.hidden=true;return;}
   const owner=names[p.id]||'Someone',cd=(state.lastWater[p.id]||0)+WATER_CD-Date.now(),cl=p.clan&&clans.get(p.clan);const mate=state.clan&&p.clan===state.clan;
-  card.innerHTML=`<div class="txt"><b>${esc(p.name)}</b><p>Grown by ${esc(owner)}${cl?` in ${esc(cl.name)}`:''}. Level ${p.level}, ${esc(LEAVES[p.leaf].name.toLowerCase())} leaves${p.asc?`, ascended ${p.asc}×`:''}. Soil ${Math.round(p.moisture)}%${giftList(p)?`, ${giftList(p)}`:''}.${isActive(p)?' <span class="on">● Active now</span>':''}</p>${mate?giftButtons(p.id):''}</div>
+  card.innerHTML=`<div class="txt"><b>${esc(p.name)}</b><p>Grown by ${esc(owner)}${cl?` in ${esc(cl.name)}`:''}. Level ${p.level}, ${esc(LEAVES[p.leaf].name.toLowerCase())} leaves${p.asc?`, ascended ${p.asc}×`:''}. Soil ${Math.round(p.moisture)}%${giftList(p)?`, ${giftList(p)}`:''}.${isActive(p)?' <span class="on">● Active now</span>':''}</p>${mate?giftButtons(p.id):''}${flyButton(p.id)}</div>
     <div style="display:grid;gap:6px"><button class="buy ${cd<=0?'go':''}" id="waterOther" ${cd>0||!online?'disabled':''}>${cd>0?`Water in ${cdText(cd)}`:'Water it'}</button></div>`;buildIcons();}
+function flyButton(id){const cd=(state.lastFly[id]||0)+FLY_CD-Date.now();return`<button class="linkish flybtn" data-fly="${esc(id)}" ${cd>0||!online?'disabled':''}>${cd>0?`Next fly in ${mins(cd)} min`:'Send a fly (−1 sap, just for fun)'}</button>`;}
+async function sendFly(to){if(!online||!to||to===myId||passive)return;const p=players.get(to);if(!p)return;if(Date.now()-(state.lastFly[to]||0)<FLY_CD)return;
+  if(p.fl.filter(e=>e>Date.now()).length>=FLY_MAX){toast(`${p.name} already has ${FLY_MAX} flies buzzing around. That’s enough.`);return;}
+  const at=Date.now();state.lastFly[to]=at;for(const[k,t]of Object.entries(state.lastFly))if(at-t>FLY_CD)delete state.lastFly[k];saveSoon();renderCard();refreshClanButtons();
+  try{await db.doc(`flies/${to}__${myId}__${at}`).set({to,from:myId,name:myName||state.plantName,at});toast(`You sent ${p.name} a fly. Bzz.`);}catch(e){delete state.lastFly[to];dbError(e);}}
+const seenFlies=new Set();
+function handleFlies(sn){if(passive||!online)return;const now=Date.now();let changed=false;
+  for(const d of sn.docs){if(!d.exists||seenFlies.has(d.id))continue;const v=d.data()||{};if(v.to!==myId)continue;seenFlies.add(d.id);const who=names[v.from]||v.name||'Someone';
+    const act=state.flies.filter(e=>e>now);
+    if(act.length<FLY_MAX&&now-(+v.at||0)<FLY_MS){act.push(now+FLY_MS);state.flies=act;state.sap=Math.max(0,state.sap-1);changed=true;toast(`${who} sent you a fly. −1 sap. Tap it to swat it.`);}
+    db.doc(`flies/${d.id}`).del().catch(()=>{});}
+  if(changed){saveSoon();maybePublish();}}
 function nameOf(id){const p=players.get(id);return p?p.name:'a plant';}
 async function waterOther(){const id=selected;if(!online||!id||id===myId)return;if(Date.now()-(state.lastWater[id]||0)<WATER_CD)return;
   state.lastWater[id]=Date.now();const rw=helpReward(10);
@@ -896,7 +922,7 @@ function buildClan(){const el=$('#p-clan');if(!el)return;const keep=$('#clanName
     ${helpersHtml()}
     <h2>Members</h2><p class="note" hidden>Ladybugs give +20% growth and bees +25% sap, each for 3 hours, up to 5 at once. Earthworms make soil dry 25% slower for 6 hours, up to 4 at once. You can send each mate one of each whenever it’s ready. Helping earns you a little sap, up to 2 hours of your own sap flow per day.</p>`;
   for(const p of ms){const you=p.id===me;
-    h+=`<div class="member"><b>${esc(p.name)}</b><span class="lv">Lv ${p.level}</span><p>${you?'You':esc(names[p.id]||'Someone')}${giftList(p)?`, ${giftList(p)}`:''}.${!you&&isActive(p)?' <span class="on">● Active now</span>':''}</p>${you?'':giftButtons(p.id)}</div>`;}
+    h+=`<div class="member"><b>${esc(p.name)}</b><span class="lv">Lv ${p.level}</span><p>${you?'You':esc(names[p.id]||'Someone')}${giftList(p)?`, ${giftList(p)}`:''}.${!you&&isActive(p)?' <span class="on">● Active now</span>':''}</p>${you?'':giftButtons(p.id)+flyButton(p.id)}</div>`;}
   if(ms.length<2)h+=`<p class="note">Share this page with friends so they can join ${esc(mine.name)}.</p>`;
   h+=`<h2>Clan chat</h2><div class="bottlebox"><div class="bottlewrap"><canvas id="bottleCv" width="120" height="240" aria-label="The clan bottle"></canvas><span id="bottleCount"></span></div><div class="txt"><b>Cave Bitter</b><p id="bottleNote">A dark herbal coffee bitter for after a long day underground.</p><div class="donate"><button class="buy" id="sipBtn">Take a sip</button><button class="buy" id="cheersBtn">Raise a glass</button></div><p class="note" id="bottleWho"></p></div></div><div class="chat" id="chatList"></div><div class="namefield"><input id="chatIn" maxlength="300" placeholder="Message your clan" aria-label="Message" value="${esc(keepChat)}"><button class="buy go" id="chatSend">Send</button></div>`;
   h+=`<button class="linkish" id="leaveClan">Leave ${esc(mine.name)}</button>`;el.innerHTML=h;leaveArm=0;buildIcons();subscribeClan();renderTreeInfo();renderChat();renderBottle();updateUnread();}
@@ -1076,7 +1102,7 @@ function ascend(){if(state.level<ascAt())return;if(Date.now()-ascArm>4000){ascAr
 function buildAll(){buildGrow();buildLook();buildAscend();buildClan();refresh();}
 function refresh(){const now=Date.now(),r=rates(state,now),n=need(state.level),mp=myPlant(),gl=giftList({id:myId||'me'});
   $('#pname').textContent=state.plantName;
-  $('#stageName').textContent=`${stageName(state.level)}${state.mut?`, ${MUTS[state.mut].name.toLowerCase()}`:''}${gl?`, ${gl}`:''}${sunFactor(now)<1?', resting for the night':''}`;
+  $('#stageName').textContent=`${stageName(state.level)}${state.mut?`, ${MUTS[state.mut].name.toLowerCase()}`:''}${gl?`, ${gl}`:''}${(state.flies||[]).filter(e=>e>now).length?`, ${state.flies.filter(e=>e>now).length} fl${state.flies.filter(e=>e>now).length>1?'ies':'y'} buzzing (tap to swat)`:''}${sunFactor(now)<1?', resting for the night':''}`;
   $('#sLevel').textContent=state.level;$('#sXpRate').textContent=`${fmt(r.xp*3600)} growth/h`;
   $('#sSap').textContent=fmt(state.sap);$('#sSapRate').textContent=`+${fmt(r.sap*3600)}/h`;
   $('#sSeeds').textContent=state.seeds;$('#sAsc').textContent=state.asc?`Ascended ${state.asc}×`:'Not ascended';
@@ -1103,6 +1129,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
   if(b.dataset.donate)return donate(+b.dataset.donate);
   if(b.dataset.join)return joinClan(b.dataset.join);
   if(b.dataset.gift)return sendGift(b.dataset.gift,b.dataset.to);
+  if(b.dataset.fly)return sendFly(b.dataset.fly);
   if(b.dataset.recall)return recallGift(b.dataset.recall);
   if(b.dataset.home)return sendHome(b.dataset.home);
   if(b.dataset.gfilter){gFilter=b.dataset.gfilter;if(gFilter==='clan'&&!state.clan)toast('Join a clan in the Clan tab first.');
@@ -1122,7 +1149,10 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
     state[cat]=k;buildLook();refresh();saveSoon();maybePublish();}});
 document.addEventListener('change',e=>{if(e.target.id==='nameIn'&&passive){e.target.value=state.plantName;return;}if(e.target.id==='nameIn'){state.plantName=e.target.value.trim().slice(0,18)||'Sprout';e.target.value=state.plantName;refresh();saveSoon();maybePublish();}});
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='clanName')createClan();if(e.key==='Enter'&&e.target.id==='chatIn'){e.preventDefault();sendChat();}});
-$('#hero').addEventListener('click',water);
+$('#hero').addEventListener('click',e=>{const r=e.currentTarget.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top+$('#heroScroll').scrollTop;
+  const hit=heroFlyPos.find(f=>Math.hypot(f.x-x,f.y-y)<f.r);if(hit){swatFly(hit);return;}water();});
+function swatFly(f){if(passive)return toast('Tap “Play here” to play in this tab.');const now=Date.now();const act=state.flies.filter(e=>e>now).sort((a,b)=>a-b);if(!act.length)return;
+  act.splice(Math.min(f.i,act.length-1),1);state.flies=act;splats.push({x:f.x,y:f.y,at:now});const lines=['Swat!','Got it.','Bzz… no more.','Splat.'];toast(lines[Math.floor(Math.random()*lines.length)]);saveSoon();maybePublish();}
 $('#jumpBtn').addEventListener('click',e=>{e.stopPropagation();focusGrowth(true);});
 window.addEventListener('resize',()=>{wantFocus=true;});
 $('#garden').addEventListener('click',e=>{const r=e.currentTarget.getBoundingClientRect();const x=e.clientX-r.left,y=e.clientY-r.top;
@@ -1138,7 +1168,7 @@ function tick(){const now=Date.now();let dt=(now-state.ts)/1000;if(dt>30){catchU
   if(now-lastRemote>60000){lastRemote=now;saveRemote();}
   if(now-lastPubBeat>120000){lastPubBeat=now;publishGarden();}
   if(now-lastCard>15000){lastCard=now;if(!$('#p-garden').hidden)renderCard();if(!$('#p-clan').hidden){refreshClanButtons();renderBottle();}}}
-function refreshClanButtons(){document.querySelectorAll('.gifts').forEach(gd=>{const b=gd.querySelector('[data-to]');if(b)gd.outerHTML=helperButtons(b.dataset.to);});
+function refreshClanButtons(){document.querySelectorAll('.flybtn').forEach(fb=>{fb.outerHTML=flyButton(fb.dataset.fly);});document.querySelectorAll('.gifts').forEach(gd=>{const b=gd.querySelector('[data-to]');if(b)gd.outerHTML=helperButtons(b.dataset.to);});
   const hb=$('#helpersBox');if(hb)hb.outerHTML=helpersHtml();buildIcons();renderTreeInfo();}
 function frame(t){if(!document.hidden){drawGate(t);if($('#layout').hidden){requestAnimationFrame(frame);return;}drawHero(t);if(!$('#p-garden').hidden)drawGarden(t);if(!$('#p-clan').hidden){drawClanTree(t);drawBottle(t);}}requestAnimationFrame(frame);}
 document.addEventListener('visibilitychange',()=>{if(document.hidden){saveLocal();saveRemote();publishGarden();}else{publishGarden();tick();}});
@@ -1175,6 +1205,7 @@ async function connect(u){saveHold=true;disconnect();myId=u.uid;myName=(u.displa
     clansLoaded=true;clanSoon();},e=>dbError(e)));
   unsubs.push(db.collection('drops').where('to','==',myId).onSnapshot(handleDrops,e=>dbError(e)));
   unsubs.push(db.collection('gifts').where('to','==',myId).onSnapshot(handleIncoming,e=>dbError(e)));
+  unsubs.push(db.collection('flies').where('to','==',myId).onSnapshot(handleFlies,e=>dbError(e)));
   unsubs.push(db.collection('gifts').where('from','==',myId).onSnapshot(handleSent,e=>dbError(e)));
   subscribeClan();lastPub='';publishGarden();saveRemote();}
 
