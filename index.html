@@ -154,6 +154,11 @@ h1{font-family:"Bagel Fat One","Arial Black",sans-serif;font-weight:400;font-siz
 .ach b{font-size:15px}.ach p{margin:2px 0 0;font-size:13px;color:var(--muted)}
 .ach.done b{color:var(--accent)}
 .prog.small{height:8px;margin:6px 0 2px}
+.bottlebox{display:flex;gap:12px;align-items:center;margin-bottom:10px;padding:10px;border:1px solid var(--line);border-radius:14px;background:var(--surface2)}
+.bottlebox canvas{width:60px;height:120px;flex:none}
+.bottlebox .txt{flex:1;min-width:0}.bottlebox p{margin:2px 0 6px;font-size:14px;color:var(--muted)}
+.sys{justify-self:center;text-align:center;font-size:13px;color:var(--muted);padding:2px 8px}
+.sys time{font-size:11px;opacity:.7;margin-left:4px}
 </style>
 </head>
 <body>
@@ -673,7 +678,8 @@ function drawHero(t){const sc=$('#heroScroll'),cv=$('#hero');const{g,w,h}=fit(cv
       g.beginPath();g.ellipse(x,y,38,13,0,0,7);g.ellipse(x+26,y-8,24,13,0,0,7);g.ellipse(x-24,y-4,20,10,0,0,7);g.fill();}}
   const gy=L.groundY-6;drawScene(sc2,B,skyD,'ground');
   const sx=shake>0?Math.sin(t*0.08)*shake*3:0;shake=Math.max(0,shake-0.03);
-  drawPlant(g,L.P,w/2+sx,L.groundY,L.unit,t);drawScene(sc2,B,skyD,'front');
+  const tip=tipsyUntil>Date.now()?Math.min(1,(tipsyUntil-Date.now())/20000):0;if(tip){g.save();g.translate(w/2,L.groundY);g.rotate(Math.sin(t*0.0025)*0.05*tip);g.translate(-w/2,-L.groundY);}
+  drawPlant(g,L.P,w/2+sx,L.groundY,L.unit,t);if(tip)g.restore();drawScene(sc2,B,skyD,'front');
   for(let i=drops.length-1;i>=0;i--){const d=drops[i];d.y+=d.v;d.v+=0.25;g.fillStyle='rgba(120,180,240,.85)';g.beginPath();g.ellipse(d.x,d.y,2.2,4.5,0,0,7);g.fill();if(d.y>Math.min(gy,sy+h+10))drops.splice(i,1);}
   g.restore();
   // sky ornaments fixed to the view
@@ -864,8 +870,8 @@ function buildClan(){const el=$('#p-clan');if(!el)return;const keep=$('#clanName
   for(const p of ms){const you=p.id===me;
     h+=`<div class="member"><b>${esc(p.name)}</b><span class="lv">Lv ${p.level}</span><p>${you?'You':esc(names[p.id]||'Someone')}${giftList(p)?`, ${giftList(p)}`:''}.${!you&&isActive(p)?' <span class="on">● Active now</span>':''}</p>${you?'':giftButtons(p.id)}</div>`;}
   if(ms.length<2)h+=`<p class="note">Share this page with friends so they can join ${esc(mine.name)}.</p>`;
-  h+=`<h2>Clan chat</h2><div class="chat" id="chatList"></div><div class="namefield"><input id="chatIn" maxlength="300" placeholder="Message your clan" aria-label="Message" value="${esc(keepChat)}"><button class="buy go" id="chatSend">Send</button></div>`;
-  h+=`<button class="linkish" id="leaveClan">Leave ${esc(mine.name)}</button>`;el.innerHTML=h;leaveArm=0;buildIcons();subscribeClan();renderTreeInfo();renderChat();updateUnread();}
+  h+=`<h2>Clan chat</h2><div class="bottlebox"><canvas id="bottleCv" width="120" height="240" aria-label="The clan bottle"></canvas><div class="txt"><b>Cave Bitter</b><p id="bottleNote">A dark herbal coffee bitter for after a long day underground.</p><div class="donate"><button class="buy" id="sipBtn">Take a sip</button><button class="buy" id="cheersBtn">Raise a glass</button></div><p class="note" id="bottleWho"></p></div></div><div class="chat" id="chatList"></div><div class="namefield"><input id="chatIn" maxlength="300" placeholder="Message your clan" aria-label="Message" value="${esc(keepChat)}"><button class="buy go" id="chatSend">Send</button></div>`;
+  h+=`<button class="linkish" id="leaveClan">Leave ${esc(mine.name)}</button>`;el.innerHTML=h;leaveArm=0;buildIcons();subscribeClan();renderTreeInfo();renderChat();renderBottle();updateUnread();}
 
 /* ---------- clan tree and chat ---------- */
 let treeDocs=new Map(),chatMsgs=[],clanUnsubs=[],subClanId=null,lastChatSend=0,chatSeenAt=0;
@@ -886,10 +892,11 @@ function subscribeClan(){if(!online||!db||!state.clan){if(subClanId)unsubClan();
   watch(()=>db.collection(`clans/${cid}/msgs`).orderBy('at','desc').limit(60),sn=>{if(subClanId!==cid)return;
     const old=new Set(chatMsgs.map(m=>m.id));
     chatMsgs=sn.docs.filter(d=>d.exists).map(d=>{const v=d.data()||{};return{id:d.id,from:String(v.from||''),name:typeof v.name==='string'?v.name.slice(0,30):'',
-      text:typeof v.text==='string'?v.text.slice(0,300):'',at:+v.at||0};}).filter(m=>m.text).sort((a,b)=>a.at-b.at);
+      text:typeof v.text==='string'?v.text.slice(0,300):'',at:+v.at||0,kind:['sip','open','cheers'].includes(v.kind)?v.kind:'msg'};}).filter(m=>m.text).sort((a,b)=>a.at-b.at);
     for(const m of chatMsgs)if(m.name&&!names[m.from])names[m.from]=m.name;
-    if(!firstChat&&$('#p-clan').hidden)for(const m of chatMsgs)if(!old.has(m.id)&&m.from!==myId)toast(`${names[m.from]||m.name||'Someone'}: ${m.text.length>70?m.text.slice(0,70)+'…':m.text}`);
-    firstChat=false;renderChat();updateUnread();});}
+    if(!firstChat)for(const m of chatMsgs)if(!old.has(m.id)&&m.from!==myId){const who=names[m.from]||m.name||'Someone';
+      if(m.kind!=='msg'){toast(sysText(m,who));if(m.kind==='sip'||m.kind==='cheers')clink=Date.now();}else if($('#p-clan').hidden)toast(`${who}: ${m.text.length>70?m.text.slice(0,70)+'…':m.text}`);}
+    firstChat=false;renderChat();renderBottle();updateUnread();});}
 function updateUnread(){const tab=document.querySelector('[data-tab="clan"]');if(!tab)return;
   const last=chatMsgs.filter(m=>m.from!==myId).reduce((a,m)=>Math.max(a,m.at),0);
   if(!$('#p-clan').hidden&&last>chatSeenAt){chatSeenAt=last;try{localStorage.setItem('leafbloom:read:'+subClanId,String(last));}catch(e){}}
@@ -897,9 +904,47 @@ function updateUnread(){const tab=document.querySelector('[data-tab="clan"]');if
 function chatTime(ts){const d=new Date(ts),n=new Date();const hm=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
   return d.toDateString()===n.toDateString()?hm:`${d.toLocaleDateString([],{month:'short',day:'numeric'})} ${hm}`;}
 function renderChat(){const el=$('#chatList');if(!el)return;const near=el.scrollHeight-el.scrollTop-el.clientHeight<60||!el.dataset.ready;
-  el.innerHTML=chatMsgs.length?chatMsgs.map(m=>{const me=m.from===myId;return`<div class="msg ${me?'me':''}"><b>${esc(me?'You':(names[m.from]||m.name||'Someone'))}</b><span>${esc(m.text)}</span><time>${chatTime(m.at)}</time></div>`;}).join('')
+  el.innerHTML=chatMsgs.length?chatMsgs.map(m=>{const me=m.from===myId;if(m.kind!=='msg')return`<div class="sys">${m.kind==='open'?'🍾':m.kind==='cheers'?'🥂':'🥃'} ${esc(sysText(m,me?'You':(names[m.from]||m.name||'Someone')))} <time>${chatTime(m.at)}</time></div>`;return`<div class="msg ${me?'me':''}"><b>${esc(me?'You':(names[m.from]||m.name||'Someone'))}</b><span>${esc(m.text)}</span><time>${chatTime(m.at)}</time></div>`;}).join('')
     :'<p class="note" style="margin:6px">No messages yet. Say hello to your clan.</p>';
   if(near)el.scrollTop=el.scrollHeight;el.dataset.ready='1';}
+/* ---------- the clan bottle: everyone shares one; sips and new bottles are chat messages ---------- */
+const BOTTLE_SIPS=15,SIP_CD=3*60*1000,CHEERS=['Jó szerencsét!','Egészségedre!','To the next cave!','Cheers!','Lights on, ropes tight!','To whoever carried the rope bag!'];
+let clink=0,tipsyUntil=0;
+function sysText(m,who){if(m.kind==='sip')return`${who} took a sip of Cave Bitter.`;if(m.kind==='open')return`${who} opened a new bottle.`;return`${who} raised a glass: ${m.text}`;}
+function bottleState(){let open=-1;for(let i=chatMsgs.length-1;i>=0;i--)if(chatMsgs[i].kind==='open'){open=i;break;}
+  const since=chatMsgs.slice(open+1),sips=since.filter(m=>m.kind==='sip').length,now=Date.now();
+  const recent=[...new Set(chatMsgs.filter(m=>m.kind==='sip'&&now-m.at<30*60*1000).map(m=>m.from))];
+  return{left:Math.max(0,BOTTLE_SIPS-sips),recent};}
+function lastSipAt(){try{return+(localStorage.getItem('leafbloom:sip:'+myId)||0);}catch(e){return 0;}}
+function renderBottle(){const cv=$('#bottleCv');if(!cv)return;const b=bottleState(),cd=lastSipAt()+SIP_CD-Date.now();
+  $('#bottleNote').textContent=b.left?`${b.left} of ${BOTTLE_SIPS} sips left in the bottle.`:'The bottle is empty.';
+  const sb=$('#sipBtn');if(b.left){sb.textContent=cd>0?`Next sip in ${mins(cd)} min`:'Take a sip';sb.disabled=cd>0||!online;sb.dataset.open='';}
+  else{sb.textContent='Open a new bottle';sb.disabled=!online;sb.dataset.open='1';}
+  const who=b.recent.map(id=>id===myId?'you':(names[id]||'someone'));$('#bottleWho').textContent=who.length?`Drinking now: ${who.join(', ')}.`:'Nobody is drinking right now.';}
+function drawBottle(t){const cv=$('#bottleCv');if(!cv)return;const{g,w,h}=fit(cv);g.clearRect(0,0,w,h);const left=bottleState().left/BOTTLE_SIPS;
+  const cx=w/2,bw=w*0.46,top=h*0.2,neckW=w*0.16,base=h*0.96,sh=h*0.34,wob=Date.now()-clink<1500?Math.sin(t*0.03)*0.06*(1-(Date.now()-clink)/1500):0;
+  g.save();g.translate(cx,base);g.rotate(wob);g.translate(-cx,-base);
+  const body=()=>{g.beginPath();g.moveTo(cx-neckW/2,top);g.lineTo(cx-neckW/2,sh-h*0.04);g.quadraticCurveTo(cx-bw/2,sh,cx-bw/2,sh+h*0.08);g.lineTo(cx-bw/2,base-6);
+    g.quadraticCurveTo(cx-bw/2,base,cx-bw/2+6,base);g.lineTo(cx+bw/2-6,base);g.quadraticCurveTo(cx+bw/2,base,cx+bw/2,base-6);g.lineTo(cx+bw/2,sh+h*0.08);
+    g.quadraticCurveTo(cx+bw/2,sh,cx+neckW/2,sh-h*0.04);g.lineTo(cx+neckW/2,top);g.closePath();};
+  body();g.fillStyle='rgba(60,40,25,.35)';g.fill();
+  g.save();body();g.clip();const fillTop=base-(base-sh)*left*1.02;const lg=g.createLinearGradient(0,fillTop,0,base);lg.addColorStop(0,'#5A2E12');lg.addColorStop(1,'#2A1206');
+  g.fillStyle=lg;g.fillRect(0,fillTop+Math.sin(t*0.004)*1.5,w,h);g.fillStyle='rgba(255,255,255,.18)';g.fillRect(cx-bw/2+5,top,4,h);g.restore();
+  body();g.strokeStyle='rgba(30,20,10,.75)';g.lineWidth=2;g.stroke();
+  g.fillStyle='#8A5A2B';g.fillRect(cx-neckW/2-2,top-h*0.06,neckW+4,h*0.07);g.fillStyle='#C9822A';g.fillRect(cx-neckW/2-3,top-h*0.015,neckW+6,h*0.03);
+  const ly=sh+h*0.16,lh=h*0.24;g.fillStyle='#EFE3C6';g.fillRect(cx-bw/2+4,ly,bw-8,lh);g.strokeStyle='#C9822A';g.lineWidth=1.5;g.strokeRect(cx-bw/2+7,ly+3,bw-14,lh-6);
+  g.fillStyle='#2A1A10';g.beginPath();const by=ly+lh*0.3,bs=bw*0.13;g.moveTo(cx,by+bs*0.25);g.quadraticCurveTo(cx-bs*0.9,by-bs*0.6,cx-bs*2,by-bs*0.1);g.quadraticCurveTo(cx-bs*1.4,by+bs*0.1,cx-bs*1.3,by+bs*0.5);
+  g.quadraticCurveTo(cx-bs*0.7,by+bs*0.1,cx,by+bs*0.55);g.quadraticCurveTo(cx+bs*0.7,by+bs*0.1,cx+bs*1.3,by+bs*0.5);g.quadraticCurveTo(cx+bs*1.4,by+bs*0.1,cx+bs*2,by-bs*0.1);
+  g.quadraticCurveTo(cx+bs*0.9,by-bs*0.6,cx,by+bs*0.25);g.fill();g.font=`700 ${Math.max(6,bw*0.15)}px Karla,sans-serif`;g.textAlign='center';g.fillText('CAVE',cx,ly+lh*0.74);g.fillText('BITTER',cx,ly+lh*0.9);
+  g.restore();}
+async function postKind(kind,text){const id=Date.now().toString(36)+Math.floor(Math.random()*1e8).toString(36);
+  await db.doc(`clans/${state.clan}/msgs/${id}`).set({from:myId,name:myName||state.plantName,text,kind,at:Date.now()});}
+async function sip(){if(!online||!state.clan)return;const b=bottleState();
+  if(!b.left){try{await postKind('open','opened a new bottle');toast('You opened a new bottle of Cave Bitter.');}catch(e){dbError(e);}return;}
+  if(Date.now()-lastSipAt()<SIP_CD)return;try{localStorage.setItem('leafbloom:sip:'+myId,String(Date.now()));}catch(e){}
+  clink=Date.now();tipsyUntil=Date.now()+90*1000;try{await postKind('sip','took a sip');}catch(e){dbError(e);}renderBottle();}
+async function cheers(){if(!online||!state.clan)return;if(Date.now()-lastChatSend<2000)return;lastChatSend=Date.now();clink=Date.now();
+  try{await postKind('cheers',CHEERS[Math.floor(Math.random()*CHEERS.length)]);}catch(e){dbError(e);}}
 async function sendChat(){const inp=$('#chatIn');if(!inp||!online||!state.clan)return;const text=inp.value.trim().replace(/\s+/g,' ').slice(0,300);if(!text)return;
   if(Date.now()-lastChatSend<2000){toast('Wait a moment before sending again.');return;}lastChatSend=Date.now();inp.value='';
   const id=Date.now().toString(36)+Math.floor(Math.random()*1e8).toString(36);
@@ -1003,6 +1048,8 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
   if(b.id==='createClan')return createClan();
   if(b.id==='leaveClan')return leaveClan();
   if(b.id==='chatSend')return sendChat();
+  if(b.id==='sipBtn')return sip();
+  if(b.id==='cheersBtn')return cheers();
   if(b.dataset.donate)return donate(+b.dataset.donate);
   if(b.dataset.join)return joinClan(b.dataset.join);
   if(b.dataset.gift)return sendGift(b.dataset.gift,b.dataset.to);
@@ -1040,10 +1087,10 @@ function tick(){const now=Date.now();let dt=(now-state.ts)/1000;if(dt>30){catchU
   refresh();if(now-lastLocal>5000){lastLocal=now;saveLocal();}
   if(now-lastRemote>60000){lastRemote=now;saveRemote();}
   if(now-lastPubBeat>120000){lastPubBeat=now;publishGarden();}
-  if(now-lastCard>15000){lastCard=now;if(!$('#p-garden').hidden)renderCard();if(!$('#p-clan').hidden)refreshClanButtons();}}
+  if(now-lastCard>15000){lastCard=now;if(!$('#p-garden').hidden)renderCard();if(!$('#p-clan').hidden){refreshClanButtons();renderBottle();}}}
 function refreshClanButtons(){document.querySelectorAll('.gifts').forEach(gd=>{const b=gd.querySelector('[data-to]');if(b)gd.outerHTML=helperButtons(b.dataset.to);});
   const hb=$('#helpersBox');if(hb)hb.outerHTML=helpersHtml();buildIcons();renderTreeInfo();}
-function frame(t){if(!document.hidden){drawHero(t);if(!$('#p-garden').hidden)drawGarden(t);if(!$('#p-clan').hidden)drawClanTree(t);}requestAnimationFrame(frame);}
+function frame(t){if(!document.hidden){drawHero(t);if(!$('#p-garden').hidden)drawGarden(t);if(!$('#p-clan').hidden){drawClanTree(t);drawBottle(t);}}requestAnimationFrame(frame);}
 document.addEventListener('visibilitychange',()=>{if(document.hidden){saveLocal();saveRemote();publishGarden();}else{publishGarden();tick();}});
 window.addEventListener('pagehide',saveLocal);
 
