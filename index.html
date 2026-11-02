@@ -159,6 +159,14 @@ h1{font-family:"Bagel Fat One","Arial Black",sans-serif;font-weight:400;font-siz
 .bottlebox .txt{flex:1;min-width:0}.bottlebox p{margin:2px 0 6px;font-size:14px;color:var(--muted)}
 .sys{justify-self:center;text-align:center;font-size:13px;color:var(--muted);padding:2px 8px}
 .sys time{font-size:11px;opacity:.7;margin-left:4px}
+.passive{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px;padding:10px 12px;border-radius:14px;background:#FFF3C4;color:#5A4500;font-size:14px;font-weight:500}
+.passive[hidden]{display:none}
+.gate{max-width:440px;margin:24px auto;text-align:center;padding:24px 18px;border-radius:24px;background:var(--surface);border:1px solid var(--line)}
+.gate canvas{width:160px;height:160px}
+.gate h2{font-family:"Bagel Fat One","Arial Black",sans-serif;font-weight:400;font-size:24px;margin:8px 0}
+.gate p{color:var(--muted);margin:0 0 16px}
+.gate .buy{font-size:17px;padding:12px 20px}
+.gate[hidden],.layout[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -167,8 +175,15 @@ h1{font-family:"Bagel Fat One","Arial Black",sans-serif;font-weight:400;font-siz
     <h1>Leafbloom</h1>
     <div class="status" id="status"><span id="statusTxt">Planting…</span><button class="linkish" id="authBtn" hidden style="display:block;margin-left:auto">Sign in with Google</button></div>
   </header>
-  <div class="layout">
+  <div class="gate" id="gate">
+    <canvas id="gateCv" width="240" height="240" aria-hidden="true"></canvas>
+    <h2>Grow a plant with your friends</h2>
+    <p id="gateMsg">Leafbloom is played with your Google account, so your plant is kept safe and your friends can see it in the garden.</p>
+    <button class="buy go" id="gateSignIn" hidden>Sign in with Google</button>
+  </div>
+  <div class="layout" id="layout" hidden>
     <section class="hero-col">
+      <div class="passive" id="passiveBar" hidden><span>Your plant is open in another tab or device, so this one is only watching.</span><button class="buy go" id="playHere">Play here</button></div>
       <div class="stage">
         <div id="heroScroll"><canvas id="hero" aria-label="Your plant. Scroll to see all of it."></canvas><div id="heroSpacer"></div></div>
         <button class="jump" id="jumpBtn" hidden>Show new growth</button>
@@ -330,7 +345,7 @@ function normalize(s){const d=newState();if(!s||typeof s!=='object')return d;
   for(const k of ['waterCount','nightWaters','bloomSecs','wetSecs'])o[k]=isFinite(s[k])?+s[k]:0;
   o.ach=obj(s.ach);o.stats=Object.assign(newState().stats,obj(s.stats));for(const k of ['playSecs','days','waters','helpersSent','wateredOthers'])if(!isFinite(o.stats[k]))o.stats[k]=0;
   if(typeof o.bg!=='string'||!has(BGS,o.bg))o.bg='meadow';
-  for(const k of ['bugs','bees','worms','lastGift','giftSeen','lastBug','bugSeen'])delete o[k];
+  for(const k of ['bugs','bees','worms','lastGift','giftSeen','lastBug','bugSeen','_sid','_at'])delete o[k];
   if(typeof o.clan!=='string')o.clan=null;if(!o.help||typeof o.help!=='object'||!isFinite(o.help.sec))o.help={day:'',sec:0};
   if(!has(MUTS,o.mut))o.mut=null;o.mutDry=isFinite(o.mutDry)?o.mutDry:0;o.mutSeen=Array.isArray(o.mutSeen)?o.mutSeen.filter(k=>has(MUTS,k)):[];o.treeGiven=(o.treeGiven&&typeof o.treeGiven==='object')?o.treeGiven:{};
   for(const k of ['xp','sap','moisture','level','seeds','seedsTotal','asc','leavesBought'])if(!isFinite(o[k]))o[k]=d[k];
@@ -369,19 +384,30 @@ const seedsFor=l=>{const q=ascAt();return l<q?0:Math.floor((3+state.asc)*Math.po
 const lsKey=()=>'leafbloom:'+(myId||'solo');
 /* saveHold: true while we don't yet know whose plant is on screen (page start, signing in); nothing is saved then */
 let saveHold=false;
-function saveLocal(){if(saveHold)return;try{localStorage.setItem(lsKey(),JSON.stringify(state));}catch(e){}}
+/* Only one open game (tab or device) may save at a time. Each page gets its own id; every save is stamped with it.
+   When another session saves after this one started, this one becomes a viewer until you tap "Play here". */
+const SID=Math.random().toString(36).slice(2)+Date.now().toString(36),SESSION_START=Date.now();
+let passive=false;
+const stamped=()=>Object.assign(JSON.parse(JSON.stringify(state)),{_sid:SID,_at:Date.now()});
+function saveLocal(){if(saveHold||passive||!myId)return;try{localStorage.setItem(lsKey(),JSON.stringify(stamped()));}catch(e){}}
+function otherSession(d){return d&&d._sid&&d._sid!==SID&&(+d._at||0)>SESSION_START;}
+function becomePassive(d){const first=!passive;passive=true;state=normalize(d);catchUp(false);buildAll();showPassive();
+  if(first)toast('Your plant is open in another tab or device. This one is just watching now.');}
+function playHere(){passive=false;showPassive();catchUp(false);saveLocal();saveRemote();publishGarden();toast('You’re playing here now.');}
+function showPassive(){const bn=$('#passiveBar');if(bn)bn.hidden=!passive;}
+window.addEventListener('storage',e=>{if(e.key!==lsKey()||!e.newValue)return;try{const d=JSON.parse(e.newValue);if(otherSession(d))becomePassive(d);}catch(x){}});
 function loadLocal(){try{const v=localStorage.getItem(lsKey())||localStorage.getItem('letterbloom:'+(myId||'solo'));return v?JSON.parse(v):null;}catch(e){return null;}}
 function writer(fn){let busy=false,again=false;const run=async()=>{if(busy){again=true;return;}busy=true;
   try{await fn();}catch(e){dbError(e);}busy=false;if(again){again=false;run();}};return run;}
 function dbError(e){const c=e&&e.code;console.warn('Firestore:',e);if(c==='permission-denied'){toast('The server refused that change. Check the Firestore rules.');}
   else if(c==='quota_exceeded')toast('The garden is full right now. Your plant is saved on this device.');}
-const saveRemote=writer(async()=>{if(!online||saveHold)return;await db.doc(`saves/${myId}`).set(JSON.parse(JSON.stringify(state)));});
+const saveRemote=writer(async()=>{if(!online||saveHold||passive)return;await db.doc(`saves/${myId}`).set(stamped());});
 function summary(){const now=Date.now(),r=rates(state,now);return{name:state.plantName,leaf:state.leaf,flower:state.flower,stem:state.stem,
   petal:state.petal,pot:state.pot,level:state.level,asc:state.asc,bloom:state.up.bloom,moisture:Math.round(state.moisture),mts:now,net:+(r.rain-r.drain).toFixed(5),
   seen:document.hidden?0:now,owner:myName,clan:state.clan||'',vis:state.visitors.filter(v=>v.until>now).map(v=>({t:v.type,r:!!v.rare,u:v.until})),home:Object.fromEntries(H_KEYS.map(k=>[k,state.stock[k].map(x=>x?1:0)])),tiers:state.tiers.slice(-60),mut:state.mut||''};}
 const pubKey=()=>[state.plantName,state.leaf,state.flower,state.stem,state.petal,state.pot,state.level,state.asc,state.up.bloom,state.clan,JSON.stringify(state.visitors.map(v=>v.key)),JSON.stringify(state.stock),state.tiers.length,state.mut].join('|');
 let lastPub='';
-const publishGarden=writer(async()=>{if(!online)return;const k=pubKey();await db.doc(`garden/${myId}`).set(summary());lastPub=k;});
+const publishGarden=writer(async()=>{if(!online||passive)return;const k=pubKey();await db.doc(`garden/${myId}`).set(summary());lastPub=k;});
 function maybePublish(){if(pubKey()!==lastPub)publishGarden();}
 let saveTimer=null;function saveSoon(){saveLocal();clearTimeout(saveTimer);saveTimer=setTimeout(saveRemote,2500);}
 
@@ -968,7 +994,7 @@ function drawClanTree(t){const cv=$('#treeCv');if(!cv||!subClanId)return;const{g
 
 /* ---------- UI ---------- */
 function spawnHeroDrops(n){const w=$('#hero').getBoundingClientRect().width,sy=$('#heroScroll').scrollTop;for(let i=0;i<n;i++)drops.push({x:w/2+(Math.random()-0.5)*w*0.35,y:sy-10-Math.random()*80,v:2+Math.random()*2});}
-function water(){if(state.moisture<95){state.waterCount++;state.stats.waters++;const h=new Date().getHours();if(h<6||h>=20)state.nightWaters++;}state.moisture=100;spawnHeroDrops(26);saveSoon();checkFinds();}
+function water(){if(passive){toast('Tap “Play here” to play in this tab.');return;}if(state.moisture<95){state.waterCount++;state.stats.waters++;const h=new Date().getHours();if(h<6||h>=20)state.nightWaters++;}state.moisture=100;spawnHeroDrops(26);saveSoon();checkFinds();}
 function setStatus(){const ab=$('#authBtn');if(ab){ab.hidden=!auth;ab.textContent=myId?'Sign out':'Sign in with Google';}
   $('#statusTxt').textContent=online?`${players.size||1} plant${players.size===1?'':'s'} in the garden`:'Playing on this device';}
 function buildGrow(){let h=`<h2>Feed your plant</h2><p class="note" id="rateNote"></p>`;
@@ -1041,6 +1067,9 @@ function refresh(){const now=Date.now(),r=rates(state,now),n=need(state.level),m
   const ab=$('#ascBtn');if(ab&&(state.level>=ascAt())===ab.disabled)buildAscend();}
 
 document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+  if(b.id==='playHere')return playHere();
+  if(b.id==='gateSignIn')return signIn();
+  if(passive&&!b.dataset.tab&&!['chatSend','sipBtn','cheersBtn','authBtn','jumpBtn'].includes(b.id)){toast('Tap “Play here” to play in this tab.');return;}
   if(b.id==='waterBtn')return water();
   if(b.id==='jumpBtn')return;
   if(b.id==='ascBtn')return ascend();
@@ -1070,7 +1099,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
   if(b.dataset.cos){const cat=b.dataset.cos,k=b.dataset.key,it=COSMETICS[cat][k];if(!state.owned[cat].includes(k)){if(state.seeds<it.cost){toast(`${it.name} costs ${it.cost} seeds.`);return;}
       state.seeds-=it.cost;state.owned[cat].push(k);}
     state[cat]=k;buildLook();refresh();saveSoon();maybePublish();}});
-document.addEventListener('change',e=>{if(e.target.id==='nameIn'){state.plantName=e.target.value.trim().slice(0,18)||'Sprout';e.target.value=state.plantName;refresh();saveSoon();maybePublish();}});
+document.addEventListener('change',e=>{if(e.target.id==='nameIn'&&passive){e.target.value=state.plantName;return;}if(e.target.id==='nameIn'){state.plantName=e.target.value.trim().slice(0,18)||'Sprout';e.target.value=state.plantName;refresh();saveSoon();maybePublish();}});
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='clanName')createClan();if(e.key==='Enter'&&e.target.id==='chatIn'){e.preventDefault();sendChat();}});
 $('#hero').addEventListener('click',water);
 $('#jumpBtn').addEventListener('click',e=>{e.stopPropagation();focusGrowth(true);});
@@ -1090,7 +1119,7 @@ function tick(){const now=Date.now();let dt=(now-state.ts)/1000;if(dt>30){catchU
   if(now-lastCard>15000){lastCard=now;if(!$('#p-garden').hidden)renderCard();if(!$('#p-clan').hidden){refreshClanButtons();renderBottle();}}}
 function refreshClanButtons(){document.querySelectorAll('.gifts').forEach(gd=>{const b=gd.querySelector('[data-to]');if(b)gd.outerHTML=helperButtons(b.dataset.to);});
   const hb=$('#helpersBox');if(hb)hb.outerHTML=helpersHtml();buildIcons();renderTreeInfo();}
-function frame(t){if(!document.hidden){drawHero(t);if(!$('#p-garden').hidden)drawGarden(t);if(!$('#p-clan').hidden){drawClanTree(t);drawBottle(t);}}requestAnimationFrame(frame);}
+function frame(t){if(!document.hidden){drawGate(t);if($('#layout').hidden){requestAnimationFrame(frame);return;}drawHero(t);if(!$('#p-garden').hidden)drawGarden(t);if(!$('#p-clan').hidden){drawClanTree(t);drawBottle(t);}}requestAnimationFrame(frame);}
 document.addEventListener('visibilitychange',()=>{if(document.hidden){saveLocal();saveRemote();publishGarden();}else{publishGarden();tick();}});
 window.addEventListener('pagehide',saveLocal);
 
@@ -1102,7 +1131,7 @@ let auth=null,unsubs=[];
 function makeDb(fs){
   const wrap=d=>({id:d.id,exists:d.exists(),data:()=>d.data()});
   const q=ref=>({where:(f,op,v)=>q(query(ref,fwhere(f,op,v))),orderBy:(f,d)=>q(query(ref,forder(f,d))),limit:n=>q(query(ref,flimit(n))),onSnapshot:(next,err)=>fsnap(ref,sn=>next({docs:sn.docs.map(wrap)}),err)});
-  return{doc:p=>{const r=fdoc(fs,PREFIX+p);return{set:data=>setDoc(r,data),del:()=>fdel(r),get:async()=>wrap(await getDoc(r))};},collection:p=>q(fcol(fs,PREFIX+p))};}
+  return{doc:p=>{const r=fdoc(fs,PREFIX+p);return{set:data=>setDoc(r,data),del:()=>fdel(r),get:async()=>wrap(await getDoc(r)),onSnapshot:(next,err)=>fsnap(r,sn=>next(wrap(sn)),err)};},collection:p=>q(fcol(fs,PREFIX+p))};}
 async function signIn(){const pr=new GoogleAuthProvider();
   try{await signInWithPopup(auth,pr);}catch(e){if(e&&(e.code==='auth/popup-blocked'||e.code==='auth/operation-not-supported-in-this-environment'))await signInWithRedirect(auth,pr);
     else if(e&&e.code!=='auth/popup-closed-by-user'&&e.code!=='auth/cancelled-popup-request')toast('Sign-in failed: '+(e.code||'unknown error'));}}
@@ -1116,7 +1145,8 @@ async function connect(u){saveHold=true;disconnect();myId=u.uid;myName=(u.displa
   /* The account's save (from the server, or this device's copy of it) always wins; the newer of the two is used.
      The plant grown before signing in only moves to the account the very first time, when the account has no save yet. */
   const cands=[remote,loadLocal()||mine].filter(Boolean).map(normalize);cands.sort((a,b)=>(b.ts||0)-(a.ts||0));
-  state=cands.length?cands[0]:normalize(state);saveHold=false;try{localStorage.setItem('leafbloom:lastUid',myId);}catch(e){}online=true;catchUp(true);regenStock(Date.now());checkFinds();wantFocus=true;buildAll();setStatus();saveLocal();
+  state=cands.length?cands[0]:newState();showGate(false);saveHold=false;try{localStorage.setItem('leafbloom:lastUid',myId);}catch(e){}online=true;catchUp(true);regenStock(Date.now());checkFinds();wantFocus=true;buildAll();setStatus();saveLocal();
+  unsubs.push(db.doc(`saves/${myId}`).onSnapshot(sn=>{if(!sn.exists)return;const d=sn.data();if(otherSession(d))becomePassive(d);},e=>dbError(e)));
   unsubs.push(db.collection('garden').onSnapshot(sn=>{players=new Map();for(const d of sn.docs){if(d.exists)players.set(d.id,cleanPlant(d.id,d.data()||{}));}
     for(const [id,p] of players)names[id]=p.owner||names[id]||'';setStatus();renderCard();clanSoon();},e=>dbError(e)));
   unsubs.push(db.collection('clans').onSnapshot(sn=>{clans=new Map();for(const d of sn.docs){if(!d.exists)continue;const v=d.data()||{};
@@ -1130,22 +1160,29 @@ async function connect(u){saveHold=true;disconnect();myId=u.uid;myName=(u.displa
 /* ---------- boot ---------- */
 let clanTimer=null;function clanSoon(){clearTimeout(clanTimer);clanTimer=setTimeout(()=>{if(!$('#p-clan').hidden)buildClan();},300);}
 $('#authBtn').addEventListener('click',async()=>{if(!auth)return;if(myId){saveLocal();await saveRemote();await signOut(auth);}else signIn();});
+/* the game is only shown to signed-in players */
+function showGate(on,msg,canSignIn){$('#gate').hidden=!on;$('#layout').hidden=on;$('#status').style.visibility=on?'hidden':'';if(msg)$('#gateMsg').textContent=msg;$('#gateSignIn').hidden=!canSignIn;
+  if(!on){wantFocus=true;}}
+function drawGate(t){const cv=$('#gateCv');if(!cv||$('#gate').hidden)return;const{g,w,h}=fit(cv);g.clearRect(0,0,w,h);
+  drawPlant(g,{id:'gate',tiers:[],leaf:'heart',flower:'daisy',stem:'spring',petal:'blush',pot:'terracotta',level:14,asc:0,bloom:1,moisture:70,bugsR:[false],beesR:[],wormsR:[],fliesR:[],cloud:0},w/2,h-6,h*0.8,t);}
 async function boot(){
+  try{localStorage.removeItem('leafbloom:solo');}catch(e){}
   /* show the last signed-in player's plant right away (from this device), so nothing jumps while signing in */
   let lastUid=null;try{lastUid=localStorage.getItem('leafbloom:lastUid');}catch(e){}
   const cached=lastUid?(()=>{try{const v=localStorage.getItem('leafbloom:'+lastUid);return v?JSON.parse(v):null;}catch(e){return null;}})():null;
-  const solo=()=>{saveHold=false;myId=null;const l=loadLocal();state=normalize(l);catchUp(true);buildAll();setStatus();};
-  if(cached){saveHold=true;state=normalize(cached);C_quietCatch();$('#statusTxt').textContent='Loading your plant…';}else{const local=loadLocal();if(local)state=normalize(local);catchUp(true);}
-  buildAll();if(!cached)setStatus();
+  const signedOut=()=>{saveHold=true;myId=null;state=newState();buildAll();setStatus();showGate(true,'Leafbloom is played with your Google account, so your plant is kept safe and your friends can see it in the garden.',true);};
+  if(cached){saveHold=true;state=normalize(cached);C_quietCatch();showGate(false);$('#statusTxt').textContent='Loading your plant…';}
+  else{saveHold=true;showGate(true,'Loading…',false);}
+  buildAll();
   setInterval(tick,250);requestAnimationFrame(frame);
   try{({firebaseConfig}=await import('./firebase-config.js'));}catch(e){console.warn('No firebase-config.js',e);}
-  if(!firebaseConfig||!firebaseConfig.apiKey||String(firebaseConfig.apiKey).startsWith('PASTE')){if(cached)solo();$('#gardenNote').textContent='Fill in firebase-config.js to share a garden. For now your plant lives on this device.';return;}
+  if(!firebaseConfig||!firebaseConfig.apiKey||String(firebaseConfig.apiKey).startsWith('PASTE')){showGate(true,'The game is not set up yet: fill in firebase-config.js.',false);return;}
   try{const[A,U,F]=await Promise.all([import(FB+'firebase-app.js'),import(FB+'firebase-auth.js'),import(FB+'firebase-firestore.js')]);
     ({initializeApp}=A);({getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,onAuthStateChanged,signOut}=U);
     ({getFirestore,setDoc,getDoc,query,doc:fdoc,collection:fcol,where:fwhere,onSnapshot:fsnap,orderBy:forder,limit:flimit,deleteDoc:fdel}=F);}
-  catch(e){console.warn('Firebase failed to load',e);if(cached)solo();$('#gardenNote').textContent='Could not reach Firebase. Your plant lives on this device until the connection works.';return;}
+  catch(e){console.warn('Firebase failed to load',e);showGate(true,'Could not reach the game servers. Check your connection and refresh the page.',false);return;}
   const app=initializeApp(firebaseConfig);auth=getAuth(app);db=makeDb(getFirestore(app));setStatus();
-  onAuthStateChanged(auth,u=>{if(u){if(myId!==u.uid||saveHold)connect(u);}else{disconnect();try{localStorage.removeItem('leafbloom:lastUid');}catch(e){}solo();}});}
+  onAuthStateChanged(auth,u=>{if(u){if(myId!==u.uid||saveHold){showGate(!cached,'Loading your plant…',false);connect(u);}}else{disconnect();try{localStorage.removeItem('leafbloom:lastUid');}catch(e){}signedOut();}});}
 boot();
 </script>
 </body>
