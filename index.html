@@ -339,7 +339,7 @@ function cdText(ms){const m=mins(ms);return m>=60?`${Math.floor(m/60)} h${m%60?`
 function newState(){return{v:2,plantName:'Sprout',leaf:'round',flower:'daisy',stem:'spring',petal:'blush',pot:'terracotta',
   level:1,xp:0,sap:0,moisture:80,ts:Date.now(),up:{roots:0,leaves:0,res:0,bloom:0},seeds:0,seedsTotal:0,asc:0,perm:{fertile:0,rain:0,deep:0},
   owned:{leaf:START_LEAVES.slice(),flower:['daisy'],stem:['spring'],petal:['blush'],pot:['terracotta']},
-  leavesBought:0,sign:'',signUntil:0,flies:[],lastFly:{},spider:0,wrapped:[],bg:'meadow',ach:{},stats:{playSecs:0,days:0,lastDay:'',waters:0,helpersSent:0,wateredOthers:0,fliesGot:0,fliesCaught:0},lastWater:{},dropSeen:{},stock:Object.fromEntries(H_KEYS.map(k=>[k,[]])),stockTs:{},found:{},visitors:[],collected:[],waterCount:0,nightWaters:0,bloomSecs:0,wetSecs:0,clan:null,best:1,tiers:[],help:{day:'',sec:0},mut:null,mutDry:0,mutSeen:[],treeGiven:{}};}
+  leavesBought:0,peeUntil:0,sign:'',signUntil:0,flies:[],lastFly:{},spider:0,wrapped:[],bg:'meadow',ach:{},stats:{playSecs:0,days:0,lastDay:'',waters:0,helpersSent:0,wateredOthers:0,fliesGot:0,fliesCaught:0},lastWater:{},dropSeen:{},stock:Object.fromEntries(H_KEYS.map(k=>[k,[]])),stockTs:{},found:{},visitors:[],collected:[],waterCount:0,nightWaters:0,bloomSecs:0,wetSecs:0,clan:null,best:1,tiers:[],help:{day:'',sec:0},mut:null,mutDry:0,mutSeen:[],treeGiven:{}};}
 function normalize(s){const d=newState();if(!s||typeof s!=='object')return d;
   const o=Object.assign(d,s);o.up=Object.assign(newState().up,s.up||{});o.perm=Object.assign(newState().perm,s.perm||{});
   o.owned=Object.assign(newState().owned,s.owned||{});for(const k of START_LEAVES)if(!o.owned.leaf.includes(k))o.owned.leaf.push(k);
@@ -353,7 +353,7 @@ function normalize(s){const d=newState();if(!s||typeof s!=='object')return d;
   o.collected=Array.isArray(s.collected)?s.collected.slice(-80):[];
   for(const k of ['waterCount','nightWaters','bloomSecs','wetSecs'])o[k]=isFinite(s[k])?+s[k]:0;
   o.ach=obj(s.ach);o.stats=Object.assign(newState().stats,obj(s.stats));for(const k of ['playSecs','days','waters','helpersSent','wateredOthers','fliesGot','fliesCaught'])if(!isFinite(o.stats[k]))o.stats[k]=0;
-  o.spider=isFinite(s.spider)?+s.spider:0;o.wrapped=Array.isArray(s.wrapped)?s.wrapped.filter(x=>isFinite(x)).slice(-3):[];
+  o.spider=isFinite(s.spider)?+s.spider:0;o.peeUntil=isFinite(s.peeUntil)?+s.peeUntil:0;if(!isFinite(o.stats.peed))o.stats.peed=0;o.wrapped=Array.isArray(s.wrapped)?s.wrapped.filter(x=>isFinite(x)).slice(-3):[];
   if(typeof o.bg!=='string'||!has(BGS,o.bg))o.bg='meadow';
   for(const k of ['bugs','bees','worms','lastGift','giftSeen','lastBug','bugSeen','_sid','_at'])delete o[k];
   if(typeof o.clan!=='string')o.clan=null;if(!o.help||typeof o.help!=='object'||!isFinite(o.help.sec))o.help={day:'',sec:0};
@@ -414,8 +414,8 @@ function dbError(e){const c=e&&e.code;console.warn('Firestore:',e);if(c==='permi
 const saveRemote=writer(async()=>{if(!online||saveHold||passive)return;await db.doc(`saves/${myId}`).set(stamped());});
 function summary(){const now=Date.now(),r=rates(state,now);return{name:state.plantName,leaf:state.leaf,flower:state.flower,stem:state.stem,
   petal:state.petal,pot:state.pot,level:state.level,asc:state.asc,bloom:state.up.bloom,moisture:Math.round(state.moisture),mts:now,net:+(r.rain-r.drain).toFixed(5),
-  seen:document.hidden?0:now,owner:myName,clan:state.clan||'',vis:state.visitors.filter(v=>v.until>now).map(v=>({t:v.type,r:!!v.rare,u:v.until})),home:Object.fromEntries(H_KEYS.map(k=>[k,state.stock[k].map(x=>x?1:0)])),fl:(state.flies||[]).filter(e=>e>now),sp:state.spider?1:0,wr:(state.wrapped||[]).filter(e=>e>now).length,sign:signOf(state),su:state.signUntil||0,tiers:state.tiers.slice(-60),mut:state.mut||''};}
-const pubKey=()=>[state.spider,(state.wrapped||[]).join(','),state.sign,state.signUntil,(state.flies||[]).join(','),state.plantName,state.leaf,state.flower,state.stem,state.petal,state.pot,state.level,state.asc,state.up.bloom,state.clan,JSON.stringify(state.visitors.map(v=>v.key)),JSON.stringify(state.stock),state.tiers.length,state.mut].join('|');
+  seen:document.hidden?0:now,owner:myName,clan:state.clan||'',vis:state.visitors.filter(v=>v.until>now).map(v=>({t:v.type,r:!!v.rare,u:v.until})),home:Object.fromEntries(H_KEYS.map(k=>[k,state.stock[k].map(x=>x?1:0)])),fl:(state.flies||[]).filter(e=>e>now),pu:state.peeUntil>now?state.peeUntil:0,sp:state.spider?1:0,wr:(state.wrapped||[]).filter(e=>e>now).length,sign:signOf(state),su:state.signUntil||0,tiers:state.tiers.slice(-60),mut:state.mut||''};}
+const pubKey=()=>[state.peeUntil,state.spider,(state.wrapped||[]).join(','),state.sign,state.signUntil,(state.flies||[]).join(','),state.plantName,state.leaf,state.flower,state.stem,state.petal,state.pot,state.level,state.asc,state.up.bloom,state.clan,JSON.stringify(state.visitors.map(v=>v.key)),JSON.stringify(state.stock),state.tiers.length,state.mut].join('|');
 let lastPub='';
 const publishGarden=writer(async()=>{if(!online||passive)return;const k=pubKey();await db.doc(`garden/${myId}`).set(summary());lastPub=k;});
 function maybePublish(){if(pubKey()!==lastPub)publishGarden();}
@@ -549,6 +549,8 @@ function drawPlant(g,P,cx,groundY,unit,t){const inv=g.getTransform().inverse();
   g.lineTo(cx+potW*0.36,groundY);g.lineTo(cx-potW*0.36,groundY);g.closePath();g.fill();
   g.fillStyle=pot.d;g.fillRect(cx-potW*0.52,potTop,potW*1.04,potH*0.2);
   g.fillStyle='rgba(255,255,255,.18)';g.fillRect(cx-potW*0.3,potTop+potH*0.3,potW*0.07,potH*0.55);
+  if(P.pu&&P.pu>Date.now()){const k=Math.min(1,(P.pu-Date.now())/PEE_MS);g.fillStyle=`rgba(232,205,60,${0.55*k+0.15})`;g.beginPath();g.ellipse(cx-potW*0.62,groundY-1,potW*0.34,potW*0.07,0,0,7);g.fill();
+    g.fillStyle=`rgba(255,250,200,${0.4*k})`;g.beginPath();g.ellipse(cx-potW*0.7,groundY-2,potW*0.1,potW*0.02,0,0,7);g.fill();}
   if(signOf(P))drawSign(g,cx+potW*0.56,groundY,signOf(P),unit,P.signMaxW||unit*0.9,!!P.hero,t,P.signRight);
   if(P.pot==='gold'){g.fillStyle='rgba(255,255,220,.55)';g.beginPath();g.arc(cx+potW*0.2,potTop+potH*0.45,potW*0.03,0,7);g.fill();}
   const wr=P.wormsR||[];for(let i=0;i<Math.min(6,wr.length);i++){const side=i%2?1:-1,x=cx+side*potW*(0.14+0.11*Math.floor(i/2)),up=0.5+0.5*Math.sin(t*0.0009+i*2.3);
@@ -617,7 +619,7 @@ function fit(cv){const r=cv.getBoundingClientRect();const dpr=Math.min(2,window.
 function skyColors(){const h=new Date().getHours()+new Date().getMinutes()/60;
   if(h>=7&&h<18)return['#6FB9EC','#CDEAF8',false,'#2C5FA0'];if((h>=18&&h<20.5)||(h>=5&&h<7))return['#E58F63','#F8D7B0',false,'#5A3F7A'];return['#14213D','#36466E',true,'#070B18'];}
 const drops=[];let shake=0,wantFocus=true;
-function myPlant(){return{id:myId||'me',hero:true,sp:state.spider?1:0,wr:(state.wrapped||[]).filter(e=>e>Date.now()).length,sign:signOf(state),su:state.signUntil,flyN:(state.flies||[]).filter(e=>e>Date.now()).length,mut:state.mut,tiers:state.tiers,leaf:state.leaf,flower:state.flower,stem:state.stem,petal:state.petal,pot:state.pot,
+function myPlant(){return{id:myId||'me',hero:true,pu:state.peeUntil,sp:state.spider?1:0,wr:(state.wrapped||[]).filter(e=>e>Date.now()).length,sign:signOf(state),su:state.signUntil,flyN:(state.flies||[]).filter(e=>e>Date.now()).length,mut:state.mut,tiers:state.tiers,leaf:state.leaf,flower:state.flower,stem:state.stem,petal:state.petal,pot:state.pot,
   level:state.level,asc:state.asc,bloom:state.up.bloom,moisture:state.moisture,...helperLooks(state.visitors.filter(v=>v.until>Date.now()).map(v=>({t:v.type,r:!!v.rare})),Object.fromEntries(H_KEYS.map(k=>[k,state.stock[k]])),true),clan:state.clan||'',name:state.plantName};}
 /* turn visitors + helpers living at home into what drawPlant shows */
 function helperLooks(vis,home,asBool){const by=k=>vis.filter(v=>v.t===k).map(v=>!!v.r).concat(((home||{})[k]||[]).map(x=>!!x));
@@ -723,6 +725,7 @@ const ACH=[
   {k:'asc10',name:'Skyward',desc:'Ascend 10 times',v:s=>s.asc,goal:10,bg:'island'},
   {k:'leaves',name:'Collector',desc:'Unlock every leaf type',v:s=>s.owned.leaf.length,goal:Object.keys(LEAVES).length},
   {k:'spider10',name:'Web master',desc:'Let your spider catch 10 flies',v:s=>s.stats.fliesCaught,goal:10},
+  {k:'marker',name:'Territorial',desc:'Pee on other plants 10 times',v:s=>s.stats.peed||0,goal:10},
   {k:'play200',name:'Ancient roots',desc:'Play for 200 hours',v:s=>s.stats.playSecs/3600,goal:200,unit:'h',bg:'space'}];
 const bgUnlocked=k=>k==='meadow'||ACH.some(a=>a.bg===k&&state.ach[a.k]);
 function checkAch(){let any=false;for(const a of ACH){if(state.ach[a.k]||a.v(state)<a.goal)continue;state.ach[a.k]=Date.now();any=true;
@@ -797,12 +800,14 @@ function drawGarden(t){const cv=$('#garden');const list=gardenList();const W=cv.
       g.fillStyle='#fff';g.fillText(tag,x+cw-tw/2-8,y+21);}
     if(p.id===(myId||'me')){g.fillStyle=C.accent;g.font='700 11px Karla, sans-serif';g.textAlign='left';g.fillText('you',x+10,y+21);}
     else if(isActive(p)){g.fillStyle='#3FB950';g.beginPath();g.arc(x+15,y+17,5,0,7);g.fill();g.strokeStyle='rgba(255,255,255,.8)';g.lineWidth=1.5;g.stroke();}});
+  if(peeFx&&Date.now()-peeFx.at<1600){const cell=gardenCells.find(c=>c.id===peeFx.id);if(cell){const k=(Date.now()-peeFx.at)/1600,sx=cell.x+cell.w*0.08,sy=cell.y+cell.h*0.62,ex=cell.x+cell.w*0.4,ey=cell.y+cell.h-38;
+      g.strokeStyle=`rgba(232,205,60,${k<0.85?0.9:(1-k)*6})`;g.lineWidth=2.5;g.beginPath();g.moveTo(sx,sy);g.quadraticCurveTo((sx+ex)/2,sy-cell.h*0.12,ex,ey);g.stroke();}}
   for(let i=gardenDrops.length-1;i>=0;i--){const d=gardenDrops[i];d.y+=d.v;d.v+=0.25;g.fillStyle='rgba(120,180,240,.9)';g.beginPath();g.ellipse(d.x,d.y,2,4,0,0,7);g.fill();if(d.y>d.stop)gardenDrops.splice(i,1);}}
 function cleanPlant(id,d){const s=v=>typeof v==='string'?v:'';const pick=(o,k,def)=>has(o,k)?k:def;
   return{id,name:s(d.name).slice(0,18)||'Plant',leaf:pick(LEAVES,d.leaf,'round'),flower:pick(FLOWERS,d.flower,'daisy'),
     stem:pick(STEMS,d.stem,'spring'),petal:pick(PETALS,d.petal,'blush'),pot:pick(POTS,d.pot,'terracotta'),level:Math.floor(clamp(+d.level||1,1,9999)),
     asc:Math.floor(clamp(+d.asc||0,0,999)),bloom:Math.floor(clamp(+d.bloom||0,0,999)),moisture:clamp(+d.moisture||0,0,100),mts:+d.mts||Date.now(),
-    net:clamp(+d.net||-0.05,-1,1),seen:+d.seen||0,owner:s(d.owner).slice(0,30),clan:s(d.clan).slice(0,40),fl:numArr(d.fl,FLY_MAX),sp:d.sp?1:0,wr:clamp(+d.wr||0,0,3)|0,sign:cleanSign(d.sign),su:isFinite(d.su)?+d.su:0,vis:Array.isArray(d.vis)?d.vis.filter(v=>v&&has(HELPERS,v.t)&&isFinite(v.u)).slice(0,8).map(v=>({t:v.t,r:!!v.r,u:+v.u})):[],home:Object.fromEntries(H_KEYS.map(k=>[k,(Array.isArray((d.home||{})[k])?d.home[k]:[]).slice(0,STOCK_CAP).map(Boolean)])),tiers:Array.isArray(d.tiers)?d.tiers.slice(-60).map(cleanTier):[],mut:has(MUTS,d.mut)?d.mut:null};}
+    net:clamp(+d.net||-0.05,-1,1),seen:+d.seen||0,owner:s(d.owner).slice(0,30),clan:s(d.clan).slice(0,40),fl:numArr(d.fl,FLY_MAX),pu:isFinite(d.pu)?+d.pu:0,sp:d.sp?1:0,wr:clamp(+d.wr||0,0,3)|0,sign:cleanSign(d.sign),su:isFinite(d.su)?+d.su:0,vis:Array.isArray(d.vis)?d.vis.filter(v=>v&&has(HELPERS,v.t)&&isFinite(v.u)).slice(0,8).map(v=>({t:v.t,r:!!v.r,u:+v.u})):[],home:Object.fromEntries(H_KEYS.map(k=>[k,(Array.isArray((d.home||{})[k])?d.home[k]:[]).slice(0,STOCK_CAP).map(Boolean)])),tiers:Array.isArray(d.tiers)?d.tiers.slice(-60).map(cleanTier):[],mut:has(MUTS,d.mut)?d.mut:null};}
 const numArr=(a,n)=>Array.isArray(a)?a.filter(x=>isFinite(x)).slice(0,n).map(Number):[];
 function giftList(p){const vis=p.visNow||(p.id===(myId||'me')?state.visitors.filter(v=>v.until>Date.now()).map(v=>({t:v.type})):[]);const out=[];
   for(const k of H_KEYS){const n=vis.filter(v=>v.t===k).length;if(n)out.push(`${n} ${n>1?HELPERS[k].plural:HELPERS[k].name.toLowerCase()}`);}return out.length?`visited by ${out.join(', ')}`:'';}
@@ -824,7 +829,7 @@ function renderCard(){const card=$('#gcard');if(!selected){card.hidden=true;retu
   const p=allPlants().find(x=>x.id===selected);if(!p){card.hidden=true;return;}
   const owner=names[p.id]||'Someone',cd=(state.lastWater[p.id]||0)+WATER_CD-Date.now(),cl=p.clan&&clans.get(p.clan);const mate=state.clan&&p.clan===state.clan;
   card.innerHTML=`<div class="txt"><b>${esc(p.name)}</b>${signOf(p)?`<p class="signline">“${esc(signOf(p))}”</p>`:''}<p>Grown by ${esc(owner)}${cl?` in ${esc(cl.name)}`:''}. Level ${p.level}, ${esc(LEAVES[p.leaf].name.toLowerCase())} leaves${p.asc?`, ascended ${p.asc}×`:''}. Soil ${Math.round(p.moisture)}%${giftList(p)?`, ${giftList(p)}`:''}.${isActive(p)?' <span class="on">● Active now</span>':''}</p>${mate?giftButtons(p.id):''}${flyButton(p.id)}</div>
-    <div style="display:grid;gap:6px"><button class="buy ${cd<=0?'go':''}" id="waterOther" ${cd>0||!online?'disabled':''}>${cd>0?`Water in ${cdText(cd)}`:'Water it'}</button></div>`;buildIcons();}
+    <div style="display:grid;gap:6px"><button class="buy ${cd<=0?'go':''}" id="waterOther" ${cd>0||!online?'disabled':''}>${cd>0?`Water in ${cdText(cd)}`:'Water it'}</button>${cd>0?'':`<button class="buy" id="peeOther" ${online?'':'disabled'}>Pee on it</button>`}</div>`;buildIcons();}
 function flyButton(id){const cd=(state.lastFly[id]||0)+FLY_CD-Date.now();return`<button class="linkish flybtn" data-fly="${esc(id)}" ${cd>0||!online?'disabled':''}>${cd>0?`Next fly in ${mins(cd)} min`:'Send a fly (−1 sap, just for fun)'}</button>`;}
 async function sendFly(to){if(!online||!to||to===myId||passive)return;const p=players.get(to);if(!p)return;if(Date.now()-(state.lastFly[to]||0)<FLY_CD)return;
   if(p.fl.filter(e=>e>Date.now()).length>=FLY_MAX){toast(`${p.name} already has ${FLY_MAX} flies buzzing around. That’s enough.`);return;}
@@ -833,26 +838,36 @@ async function sendFly(to){if(!online||!to||to===myId||passive)return;const p=pl
 const seenFlies=new Set();
 /* the spider moves in after 5 flies and now and then catches one: the fly is gone and you get your sap back */
 const SPIDER_AFTER=5,SPIDER_CATCH_S=25*60;let catchFx=null;
-function checkSpider(){if(!state.spider&&state.stats.fliesGot>=SPIDER_AFTER){state.spider=Date.now();toast('All those flies attracted a spider. It spun a web on your plant and will catch flies now and then.');saveSoon();maybePublish();}}
+function checkSpider(){state.stats.fliesGot=Math.max(state.stats.fliesGot,(state.flies||[]).length);if(!state.spider&&state.stats.fliesGot>=SPIDER_AFTER){state.spider=Date.now();toast('All those flies attracted a spider. It spun a web on your plant and will catch flies now and then.');saveSoon();maybePublish();}}
 function spiderHunt(dt){if(!state.spider||passive||!online)return;const now=Date.now();let act=state.flies.filter(e=>e>now);if(!act.length)return;
   const p=1-Math.exp(-dt*act.length/SPIDER_CATCH_S);if(Math.random()>=p)return;
   act.sort((a,b)=>a-b);act.shift();state.flies=act;state.sap+=1;state.stats.fliesCaught++;state.wrapped=(state.wrapped||[]).filter(e=>e>now).concat(now+2*3600*1000).slice(-3);
   catchFx={at:now,i:act.length};toast('Your spider caught a fly. You got your sap back.');saveSoon();maybePublish();}
 function handleFlies(sn){if(passive||!online)return;const now=Date.now();let changed=false;
   for(const d of sn.docs){if(!d.exists||seenFlies.has(d.id))continue;const v=d.data()||{};if(v.to!==myId)continue;seenFlies.add(d.id);const who=names[v.from]||v.name||'Someone';
-    const act=state.flies.filter(e=>e>now);
-    if(act.length<FLY_MAX&&now-(+v.at||0)<FLY_MS){act.push(now+FLY_MS);state.flies=act;state.sap=Math.max(0,state.sap-1);changed=true;state.stats.fliesGot++;toast(`${who} sent you a fly. −1 sap. Tap it to swat it.`);}
+    state.stats.fliesGot++;changed=true;const act=state.flies.filter(e=>e>now);
+    if(act.length<FLY_MAX&&now-(+v.at||0)<FLY_MS){act.push(now+FLY_MS);state.flies=act;state.sap=Math.max(0,state.sap-1);changed=true;toast(`${who} sent you a fly. −1 sap. Tap it to swat it.`);}
     db.doc(`flies/${d.id}`).del().catch(()=>{});}
   if(changed){checkSpider();saveSoon();maybePublish();}}
 function nameOf(id){const p=players.get(id);return p?p.name:'a plant';}
+/* peeing on someone's plant: waters it a little (+20 instead of +35), leaves a yellow puddle for an hour, and may attract a fly */
+const PEE_MS=60*60*1000,PEE_FLY=0.3;let peeFx=null;
+async function peeOther(){const id=selected;if(!online||!id||id===myId||passive)return;if(Date.now()-(state.lastWater[id]||0)<WATER_CD)return;
+  state.lastWater[id]=Date.now();const rw=helpReward(5);peeFx={id,at:Date.now()};state.stats.peed=(state.stats.peed||0)+1;
+  toast(`You peed on ${nameOf(id)}’s plant. It still counts as watering… sort of.${helpNote(rw)}`);renderCard();saveSoon();checkAch();
+  try{await db.doc(`drops/${id}__${myId}`).set({to:id,from:myId,at:Date.now(),kind:'pee'});}catch(e){dbError(e);}}
 async function waterOther(){const id=selected;if(!online||!id||id===myId)return;if(Date.now()-(state.lastWater[id]||0)<WATER_CD)return;
   state.lastWater[id]=Date.now();const rw=helpReward(10);
   const cell=gardenCells.find(c=>c.id===id);if(cell)for(let i=0;i<22;i++)gardenDrops.push({x:cell.x+cell.w*(0.3+Math.random()*0.4),y:cell.y+10+Math.random()*30,v:Math.random()*2,stop:cell.y+cell.h-40});
   state.stats.wateredOthers++;toast(`You watered ${nameOf(id)}.${helpNote(rw)}`);renderCard();saveSoon();
   try{await db.doc(`drops/${id}__${myId}`).set({to:id,from:myId,at:Date.now()});}catch(e){dbError(e);}}
 function handleDrops(snap){let got=0;for(const d of snap.docs){const v=d.data()||{};const from=String(v.from||'');const at=+v.at||0;
-  if(!from||from===myId||v.to!==myId)continue;if(at>(state.dropSeen[from]||0)&&at<=Date.now()+60000){state.dropSeen[from]=at;state.moisture=Math.min(100,state.moisture+35);got++;
-    toast(`${names[from]||'A neighbor'} watered your plant.`);}}
+  if(!from||from===myId||v.to!==myId)continue;if(at>(state.dropSeen[from]||0)&&at<=Date.now()+60000){state.dropSeen[from]=at;got++;const who=names[from]||'A neighbor';
+    if(v.kind==='pee'){state.moisture=Math.min(100,state.moisture+20);state.peeUntil=Date.now()+PEE_MS;let fly='';
+      const act=state.flies.filter(e=>e>Date.now());state.stats.fliesGot++;
+      if(Math.random()<PEE_FLY&&act.length<FLY_MAX){act.push(Date.now()+FLY_MS);state.flies=act;state.sap=Math.max(0,state.sap-1);fly=' The smell attracted a fly (−1 sap).';}
+      toast(`${who} peed on your plant. Soil +20%, and it smells a bit.${fly}`);checkSpider();}
+    else{state.moisture=Math.min(100,state.moisture+35);toast(`${who} watered your plant.`);}}}
   if(got){shake=1;spawnHeroDrops(30);saveSoon();publishGarden();}}
 let sentDocs=new Map(),incomingDocs=new Map(),markedQueued=new Set();
 function sentTo(k,to){for(const d of sentDocs.values())if(d.type===k&&d.to===to&&['sent','queued','visiting'].includes(d.status))return d;return null;}
@@ -1170,6 +1185,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
   if(b.id==='jumpBtn')return;
   if(b.id==='ascBtn')return ascend();
   if(b.id==='waterOther')return waterOther();
+  if(b.id==='peeOther')return peeOther();
   if(b.id==='createClan')return createClan();
   if(b.id==='leaveClan')return leaveClan();
   if(b.id==='chatSend')return sendChat();
@@ -1248,7 +1264,7 @@ async function connect(u){saveHold=true;disconnect();myId=u.uid;myName=(u.displa
   /* The account's save (from the server, or this device's copy of it) always wins; the newer of the two is used.
      The plant grown before signing in only moves to the account the very first time, when the account has no save yet. */
   const cands=[remote,loadLocal()||mine].filter(Boolean).map(normalize);cands.sort((a,b)=>(b.ts||0)-(a.ts||0));
-  state=cands.length?cands[0]:newState();showGate(false);saveHold=false;try{localStorage.setItem('leafbloom:lastUid',myId);}catch(e){}online=true;catchUp(true);regenStock(Date.now());checkFinds();wantFocus=true;buildAll();setStatus();saveLocal();
+  state=cands.length?cands[0]:newState();showGate(false);checkSpider();saveHold=false;try{localStorage.setItem('leafbloom:lastUid',myId);}catch(e){}online=true;catchUp(true);regenStock(Date.now());checkFinds();wantFocus=true;buildAll();setStatus();saveLocal();
   unsubs.push(db.doc(`saves/${myId}`).onSnapshot(sn=>{if(!sn.exists)return;const d=sn.data();if(otherSession(d))becomePassive(d);},e=>dbError(e)));
   unsubs.push(db.collection('garden').onSnapshot(sn=>{players=new Map();for(const d of sn.docs){if(d.exists)players.set(d.id,cleanPlant(d.id,d.data()||{}));}
     for(const [id,p] of players)names[id]=p.owner||names[id]||'';setStatus();renderCard();clanSoon();},e=>dbError(e)));
