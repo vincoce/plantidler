@@ -273,7 +273,7 @@ const PERMS={
   rain:{name:'Rain charm',max:5,cost:l=>[4,9,18,35,60][l]||999,eff:l=>l?`Rain adds ${(4.8*l).toFixed(1)} soil per hour`:'Gentle rain waters you while away'},
   deep:{name:'Deep roots',max:5,cost:l=>5*Math.pow(2,l),eff:l=>`Start each life with Roots level ${2*l}`}
 };
-const PACE=65, WATER_CD=60*60*1000;
+const PACE=32.5, WATER_CD=60*60*1000;
 /* rare looks a new section can get when you ascend */
 const MUTS={variegated:{name:'Variegated',w:5,desc:'cream-striped leaves'},giant:{name:'Giant leaves',w:4,desc:'leaves half again as big'},
   twisted:{name:'Twisted',w:4,desc:'a winding stem'},twin:{name:'Twin bloom',w:3,desc:'two flowers on every tip'},
