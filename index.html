@@ -144,6 +144,16 @@ h1{font-family:"Bagel Fat One","Arial Black",sans-serif;font-weight:400;font-siz
 .hrow p{margin:0;font-size:13px;color:var(--muted)}
 .gifts{grid-template-columns:repeat(3,1fr)}
 .on{color:#2E9E45;font-weight:700;white-space:nowrap}
+.bgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+.bgc{border:2px solid var(--line);background:var(--surface2);border-radius:12px;padding:4px;cursor:pointer;display:grid;gap:3px;font-size:13px;font-weight:700;text-align:center}
+.bgc canvas{width:100%;aspect-ratio:8/5;border-radius:8px;display:block}
+.bgc[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 2px var(--accent)}
+.bgc.locked{opacity:.75}
+.bgc small{font-weight:500;color:var(--muted);font-size:11px}
+.ach{padding:8px 0;border-top:1px solid var(--line)}
+.ach b{font-size:15px}.ach p{margin:2px 0 0;font-size:13px;color:var(--muted)}
+.ach.done b{color:var(--accent)}
+.prog.small{height:8px;margin:6px 0 2px}
 </style>
 </head>
 <body>
@@ -302,7 +312,7 @@ function cdText(ms){const m=mins(ms);return m>=60?`${Math.floor(m/60)} h${m%60?`
 function newState(){return{v:2,plantName:'Sprout',leaf:'round',flower:'daisy',stem:'spring',petal:'blush',pot:'terracotta',
   level:1,xp:0,sap:0,moisture:80,ts:Date.now(),up:{roots:0,leaves:0,res:0,bloom:0},seeds:0,seedsTotal:0,asc:0,perm:{fertile:0,rain:0,deep:0},
   owned:{leaf:START_LEAVES.slice(),flower:['daisy'],stem:['spring'],petal:['blush'],pot:['terracotta']},
-  leavesBought:0,lastWater:{},dropSeen:{},stock:{},stockTs:{},found:{},visitors:[],collected:[],waterCount:0,nightWaters:0,bloomSecs:0,wetSecs:0,clan:null,best:1,tiers:[],help:{day:'',sec:0},mut:null,mutDry:0,mutSeen:[],treeGiven:{}};}
+  leavesBought:0,bg:'meadow',ach:{},stats:{playSecs:0,days:0,lastDay:'',waters:0,helpersSent:0,wateredOthers:0},lastWater:{},dropSeen:{},stock:Object.fromEntries(H_KEYS.map(k=>[k,[]])),stockTs:{},found:{},visitors:[],collected:[],waterCount:0,nightWaters:0,bloomSecs:0,wetSecs:0,clan:null,best:1,tiers:[],help:{day:'',sec:0},mut:null,mutDry:0,mutSeen:[],treeGiven:{}};}
 function normalize(s){const d=newState();if(!s||typeof s!=='object')return d;
   const o=Object.assign(d,s);o.up=Object.assign(newState().up,s.up||{});o.perm=Object.assign(newState().perm,s.perm||{});
   o.owned=Object.assign(newState().owned,s.owned||{});for(const k of START_LEAVES)if(!o.owned.leaf.includes(k))o.owned.leaf.push(k);
@@ -313,6 +323,8 @@ function normalize(s){const d=newState();if(!s||typeof s!=='object')return d;
   o.visitors=Array.isArray(s.visitors)?s.visitors.filter(v=>v&&has(HELPERS,v.type)&&isFinite(v.until)).slice(0,8):[];
   o.collected=Array.isArray(s.collected)?s.collected.slice(-80):[];
   for(const k of ['waterCount','nightWaters','bloomSecs','wetSecs'])o[k]=isFinite(s[k])?+s[k]:0;
+  o.ach=obj(s.ach);o.stats=Object.assign(newState().stats,obj(s.stats));for(const k of ['playSecs','days','waters','helpersSent','wateredOthers'])if(!isFinite(o.stats[k]))o.stats[k]=0;
+  if(typeof o.bg!=='string'||!has(BGS,o.bg))o.bg='meadow';
   for(const k of ['bugs','bees','worms','lastGift','giftSeen','lastBug','bugSeen'])delete o[k];
   if(typeof o.clan!=='string')o.clan=null;if(!o.help||typeof o.help!=='object'||!isFinite(o.help.sec))o.help={day:'',sec:0};
   if(!has(MUTS,o.mut))o.mut=null;o.mutDry=isFinite(o.mutDry)?o.mutDry:0;o.mutSeen=Array.isArray(o.mutSeen)?o.mutSeen.filter(k=>has(MUTS,k)):[];o.treeGiven=(o.treeGiven&&typeof o.treeGiven==='object')?o.treeGiven:{};
@@ -531,28 +543,141 @@ function heroLayout(w,h){const P=myPlant();const unit=Math.min(w*0.72,h*0.68,360
 function focusGrowth(smooth){const sc=$('#heroScroll');const h=sc.clientHeight,w=sc.clientWidth;const L=heroLayout(w,h);
   const top=clamp(L.growTop-h*0.42,0,L.worldH-h);$('#heroSpacer').style.height=(L.worldH-h)+'px';
   if(smooth)sc.scrollTo({top,behavior:'smooth'});else sc.scrollTop=top;}
+/* ---------- backgrounds (unlocked by achievements) ---------- */
+/* c: {g,w,h,sy,worldH,gy,t,night,k}; back/ground/front draw in world space, overlay in screen space */
+function hills(g,w,gy,col,amp,ph){g.fillStyle=col;g.beginPath();g.moveTo(0,gy);for(let x=0;x<=w;x+=w/24)g.lineTo(x,gy-amp*(0.6+0.4*Math.sin(x/w*6+ph))-amp*0.3*Math.sin(x/w*13+ph*2));g.lineTo(w,gy+2);g.lineTo(0,gy+2);g.fill();}
+function pine(g,x,base,ht,col){g.fillStyle=col;for(let i=0;i<3;i++){const y=base-ht*(0.25+i*0.25),wd=ht*(0.42-i*0.1);g.beginPath();g.moveTo(x,y-ht*0.32);g.lineTo(x-wd,y+ht*0.12);g.lineTo(x+wd,y+ht*0.12);g.fill();}g.fillRect(x-ht*0.04,base-ht*0.15,ht*0.08,ht*0.15);}
+const BGS={
+  meadow:{name:'Meadow',ground(c){const{g,w,gy,worldH,night}=c;g.fillStyle=night?'#22402B':'#8DC274';g.beginPath();g.moveTo(0,gy-30);g.quadraticCurveTo(w*0.3,gy-70,w*0.6,gy-34);
+    g.quadraticCurveTo(w*0.85,gy-10,w,gy-40);g.lineTo(w,worldH);g.lineTo(0,worldH);g.fill();g.fillStyle=night?'#1A3322':'#6FA65A';g.fillRect(0,gy,w,worldH-gy);},noTint:true},
+  sill:{name:'Windowsill',
+    back(c){const{g,w,h,sy,k}=c;g.fillStyle='rgba(244,238,226,.95)';g.fillRect(w/2-4*k,sy,8*k,h);g.fillRect(0,sy+h*0.4,w,8*k);},
+    ground(c){const{g,w,gy,worldH,k}=c;g.fillStyle='#A87445';g.fillRect(0,gy-4*k,w,worldH-gy+4*k);g.fillStyle='#C3895A';g.fillRect(0,gy-4*k,w,6*k);
+      g.strokeStyle='rgba(80,45,20,.25)';g.lineWidth=1;for(let y=gy+10*k;y<worldH;y+=12*k){g.beginPath();g.moveTo(0,y);g.lineTo(w,y);g.stroke();}},
+    overlay(c){const{g,w,h,k}=c,f=14*k;g.fillStyle='#F1EAD8';g.fillRect(0,0,w,f);g.fillRect(0,0,f,h);g.fillRect(w-f,0,f,h);
+      g.fillStyle='rgba(0,0,0,.12)';g.fillRect(f,f,w-2*f,3*k);g.fillRect(f,f,3*k,h);
+      const cw=w*0.13;const gr=g.createLinearGradient(f,0,f+cw,0);gr.addColorStop(0,'rgba(214,120,104,.95)');gr.addColorStop(1,'rgba(232,160,140,.75)');g.fillStyle=gr;
+      g.beginPath();g.moveTo(f,f);g.lineTo(f+cw,f);for(let y=f;y<=h;y+=8)g.lineTo(f+cw*0.85+Math.sin(y*0.05)*cw*0.12,y);g.lineTo(f,h);g.fill();
+      g.strokeStyle='rgba(150,70,60,.35)';g.lineWidth=1;for(let i=1;i<4;i++){g.beginPath();g.moveTo(f+cw*i/4,f);g.lineTo(f+cw*i/4.4,h);g.stroke();}}},
+  greenhouse:{name:'Greenhouse',
+    back(c){const{g,w,h,sy,k}=c;g.fillStyle='rgba(190,235,200,.16)';g.fillRect(0,sy,w,h);g.strokeStyle='rgba(255,255,255,.45)';g.lineWidth=3*k;
+      const sx=80*k,syy=110*k;for(let x=sx/2;x<w;x+=sx){g.beginPath();g.moveTo(x,sy);g.lineTo(x,sy+h);g.stroke();}
+      for(let y=Math.floor(sy/syy)*syy;y<sy+h;y+=syy){g.beginPath();g.moveTo(0,y);g.lineTo(w,y);g.stroke();}},
+    ground(c){const{g,w,gy,worldH,k}=c;g.fillStyle='#C77C55';g.fillRect(0,gy-4*k,w,worldH-gy+4*k);g.strokeStyle='rgba(90,40,20,.35)';g.lineWidth=1;
+      let r=0;for(let y=gy-4*k;y<worldH;y+=14*k,r++){g.beginPath();g.moveTo(0,y);g.lineTo(w,y);g.stroke();for(let x=(r%2)*14*k;x<w;x+=28*k){g.beginPath();g.moveTo(x,y);g.lineTo(x,y+14*k);g.stroke();}}},
+    front(c){const{g,w,gy,k,t}=c;for(const fx of[0.1,0.9]){const x=w*fx,pw=26*k;g.fillStyle='#B8643E';g.beginPath();g.moveTo(x-pw/2,gy-pw*0.8);g.lineTo(x+pw/2,gy-pw*0.8);g.lineTo(x+pw*0.38,gy);g.lineTo(x-pw*0.38,gy);g.fill();
+      for(let i=0;i<5;i++){g.save();g.translate(x,gy-pw*0.8);g.rotate(-Math.PI/2+(i-2)*0.45+Math.sin(t*0.001+i)*0.05);drawLeaf(g,'pointed',pw*0.9,['#4FA34A','#6DBB55','#3D8C3F'][i%3]);g.restore();}}}},
+  lake:{name:'Mountain lake',
+    back(c){const{g,w,gy,k,night}=c;const base=gy-22*k;
+      for(const[col,amp,ph,snow]of[[night?'#2A3B52':'#93ADC7',150*k,1.3,true],[night?'#22324A':'#6F8DAC',95*k,3.1,false]]){g.fillStyle=col;g.beginPath();g.moveTo(0,base);
+        const pts=[];for(let i=0;i<=6;i++){const x=w*i/6,y=base-amp*(0.45+0.55*Math.abs(Math.sin(i*1.7+ph)));pts.push([x,y]);g.lineTo(x,y);if(i<6)g.lineTo(x+w/12,base-amp*0.3);}
+        g.lineTo(w,base);g.fill();if(snow){g.fillStyle='rgba(255,255,255,.9)';for(const[x,y]of pts){g.beginPath();g.moveTo(x,y);g.lineTo(x-amp*0.12,y+amp*0.16);g.lineTo(x+amp*0.12,y+amp*0.16);g.fill();}}}
+      const lg=g.createLinearGradient(0,base,0,gy);lg.addColorStop(0,night?'#1E3550':'#86BEDF');lg.addColorStop(1,night?'#142640':'#5C97C2');g.fillStyle=lg;g.fillRect(0,base,w,gy-base+2);
+      g.strokeStyle='rgba(255,255,255,.5)';g.lineWidth=1;for(let i=0;i<6;i++){const x=((i*97+c.t*0.01)%w),y=base+4*k+(i%3)*5*k;g.beginPath();g.moveTo(x,y);g.lineTo(x+18*k,y);g.stroke();}},
+    ground(c){const{g,w,gy,worldH,k}=c;g.fillStyle='#8DC274';g.fillRect(0,gy-2*k,w,worldH-gy+2*k);const r=rng(5);g.fillStyle='#A9A7A0';
+      for(let i=0;i<14;i++){g.beginPath();g.ellipse(r()*w,gy+r()*14*k,(3+r()*4)*k,(2+r()*2)*k,0,0,7);g.fill();}}},
+  forest:{name:'Night forest',sky:()=>['#0E1A2B','#2B3B4F',true,'#060B14'],noTint:true,
+    back(c){const{g,w,gy,k}=c;const r=rng(9);for(const[col,ht,n]of[['#1F3347',150,9],['#172838',115,8],['#0F1C28',85,7]])for(let i=0;i<n;i++)pine(g,(i+r()*0.8)/n*w,gy-2,ht*k*(0.8+r()*0.4),col);},
+    ground(c){const{g,w,gy,worldH,k}=c;g.fillStyle='#1C3324';g.fillRect(0,gy-3*k,w,worldH-gy+3*k);
+      for(const fx of[0.15,0.3,0.78]){const x=w*fx;g.fillStyle='#E8E2C8';g.fillRect(x-1.5*k,gy-6*k,3*k,6*k);g.fillStyle='rgba(150,220,255,.85)';g.beginPath();g.ellipse(x,gy-6*k,6*k,3.5*k,0,Math.PI,0);g.fill();}},
+    overlay(c){const{g,w,h,t}=c;for(let i=0;i<14;i++){const x=(Math.sin(t*0.0002*(1+i%4)+i*3.1)*0.5+0.5)*w,y=(Math.cos(t*0.00017*(1+i%3)+i*1.7)*0.5+0.5)*h,a=0.4+0.4*Math.sin(t*0.003+i);
+      const gr=g.createRadialGradient(x,y,0,x,y,8);gr.addColorStop(0,`rgba(210,255,140,${a})`);gr.addColorStop(1,'rgba(210,255,140,0)');g.fillStyle=gr;g.beginPath();g.arc(x,y,8,0,7);g.fill();}}},
+  space:{name:'Starfield',sky:()=>['#05060F','#1B1440',true,'#000005'],noClouds:true,noSun:true,noTint:true,
+    back(c){const{g,w,h,sy,worldH,gy,k,t}=c;
+      for(const[x,y,rad,col]of[[0.25,0.35,260,'90,50,160'],[0.8,0.7,220,'30,120,150']]){const cx=w*x,cy=sy+h*y,gr=g.createRadialGradient(cx,cy,0,cx,cy,rad*k);gr.addColorStop(0,`rgba(${col},.35)`);gr.addColorStop(1,`rgba(${col},0)`);g.fillStyle=gr;g.fillRect(0,sy,w,h);}
+      const r=rng(21);const n=Math.ceil(worldH/6);for(let i=0;i<n;i++){const x=r()*w,y=r()*worldH;if(y<sy||y>sy+h)continue;g.globalAlpha=0.4+0.5*Math.abs(Math.sin(t*0.0008+i));g.fillStyle='#fff';g.fillRect(x,y,1.4,1.4);}g.globalAlpha=1;
+      const px=w*0.2,py=gy-h*0.55,pr=34*k;const pg=g.createLinearGradient(px-pr,py-pr,px+pr,py+pr);pg.addColorStop(0,'#E9A36B');pg.addColorStop(1,'#7A3E5C');
+      g.strokeStyle='rgba(240,210,170,.6)';g.lineWidth=3*k;g.beginPath();g.ellipse(px,py,pr*1.7,pr*0.45,-0.3,Math.PI,0);g.stroke();
+      g.fillStyle=pg;g.beginPath();g.arc(px,py,pr,0,7);g.fill();g.beginPath();g.ellipse(px,py,pr*1.7,pr*0.45,-0.3,0,Math.PI);g.stroke();},
+    ground(c){const{g,w,gy,worldH,k}=c;g.fillStyle='#8D8C96';g.beginPath();g.moveTo(0,gy+4*k);g.quadraticCurveTo(w/2,gy-22*k,w,gy+4*k);g.lineTo(w,worldH);g.lineTo(0,worldH);g.fill();
+      g.fillStyle='rgba(60,60,70,.45)';for(const[x,y,r]of[[0.2,10,7],[0.7,6,10],[0.85,16,5],[0.35,20,4]]){g.beginPath();g.ellipse(w*x,gy+y*k,r*k,r*k*0.45,0,0,7);g.fill();}}},
+  snow:{name:'Winter garden',sky:d=>d[2]?d:['#9FC3DD','#E8F0F5',false,d[3]],
+    back(c){const{g,w,gy,k}=c;hills(g,w,gy-6*k,'#DCE7F0',60*k,0.7);
+      g.strokeStyle='#4A3A33';g.lineCap='round';for(const fx of[0.14,0.86]){const x=w*fx,b=gy-8*k,ht=110*k;g.lineWidth=5*k;g.beginPath();g.moveTo(x,b);g.lineTo(x,b-ht);g.stroke();
+        g.lineWidth=2*k;for(let i=1;i<5;i++){const y=b-ht*i/5,s=i%2?1:-1;g.beginPath();g.moveTo(x,y);g.lineTo(x+s*ht*0.3,y-ht*0.18);g.stroke();}}},
+    ground(c){const{g,w,gy,worldH,k}=c;g.fillStyle='#F4F8FB';g.fillRect(0,gy-4*k,w,worldH-gy+4*k);g.fillStyle='rgba(150,180,210,.3)';g.fillRect(0,gy+8*k,w,3*k);},
+    overlay(c){const{g,w,h,t}=c;g.fillStyle='rgba(255,255,255,.9)';for(let i=0;i<45;i++){const sp=0.02+(i%5)*0.006,x=(i*53.7+Math.sin(t*0.001+i)*20)%w,y=(t*sp+i*97)%(h+20)-10;g.beginPath();g.arc(x,y,1+(i%3),0,7);g.fill();}}},
+  dunes:{name:'Desert oasis',sky:d=>d[2]?d:['#79BCE8','#F6E3B8',false,d[3]],
+    back(c){const{g,w,gy,k}=c;hills(g,w,gy-10*k,'#EBCB8E',70*k,2.1);hills(g,w,gy-2*k,'#DDB274',40*k,4.4);
+      const cac=(x,b,ht)=>{g.fillStyle='#4E7A3A';g.lineCap='round';g.strokeStyle='#4E7A3A';g.lineWidth=ht*0.16;g.beginPath();g.moveTo(x,b);g.lineTo(x,b-ht);g.stroke();
+        g.lineWidth=ht*0.11;g.beginPath();g.moveTo(x,b-ht*0.45);g.lineTo(x-ht*0.25,b-ht*0.45);g.lineTo(x-ht*0.25,b-ht*0.75);g.stroke();g.beginPath();g.moveTo(x,b-ht*0.6);g.lineTo(x+ht*0.22,b-ht*0.6);g.lineTo(x+ht*0.22,b-ht*0.85);g.stroke();};
+      cac(w*0.14,gy-4*k,70*k);cac(w*0.88,gy-2*k,52*k);
+      g.fillStyle='#5FA6C9';g.beginPath();g.ellipse(w*0.72,gy-3*k,38*k,6*k,0,0,7);g.fill();},
+    ground(c){const{g,w,gy,worldH,k}=c;g.fillStyle='#E7C67F';g.fillRect(0,gy-3*k,w,worldH-gy+3*k);g.strokeStyle='rgba(160,110,50,.25)';g.lineWidth=1;
+      for(let y=gy+5*k;y<worldH;y+=7*k){g.beginPath();for(let x=0;x<=w;x+=10)g.lineTo(x,y+Math.sin(x*0.05+y)*2*k);g.stroke();}}},
+  orchard:{name:'Cherry orchard',
+    back(c){const{g,w,gy,k}=c;hills(g,w,gy-4*k,'#9CCB7E',40*k,1.1);const r=rng(13);
+      for(const fx of[0.08,0.3,0.7,0.93]){const x=w*fx,b=gy-6*k,ht=(90+r()*30)*k;g.fillStyle='#6B4A3A';g.fillRect(x-4*k,b-ht*0.55,8*k,ht*0.55);
+        for(let i=0;i<7;i++){g.fillStyle=i%2?'#F4B6C8':'#EFA1B8';g.beginPath();g.arc(x+(r()-0.5)*ht*0.6,b-ht*0.6-r()*ht*0.35,ht*(0.16+r()*0.08),0,7);g.fill();}}},
+    ground(c){const{g,w,gy,worldH,k}=c;g.fillStyle='#8DC274';g.fillRect(0,gy-3*k,w,worldH-gy+3*k);const r=rng(17);g.fillStyle='#F4B6C8';
+      for(let i=0;i<30;i++){g.beginPath();g.ellipse(r()*w,gy+r()*(worldH-gy),2.5*k,1.5*k,r()*3,0,7);g.fill();}},
+    overlay(c){const{g,w,h,t}=c;for(let i=0;i<18;i++){const x=(i*71+t*0.015*(1+i%3))%(w+20)-10,y=(t*0.02*(1+i%4*0.3)+i*113)%(h+20)-10;
+      g.save();g.translate(x,y);g.rotate(t*0.002+i);g.fillStyle=i%2?'#F7C4D2':'#EFA1B8';g.beginPath();g.ellipse(0,0,4,2.4,0,0,7);g.fill();g.restore();}}},
+  island:{name:'Sky island',noTint:false,
+    back(c){const{g,w,gy,k,night}=c;g.fillStyle=night?'rgba(40,60,90,.8)':'rgba(120,170,110,.75)';for(const[fx,dy,s]of[[0.15,-160,0.5],[0.85,-260,0.35]]){const x=w*fx,y=gy+dy*k,rw=60*k*s*2;
+      g.beginPath();g.ellipse(x,y,rw,rw*0.18,0,Math.PI,0);g.lineTo(x,y+rw*0.6);g.closePath();g.fill();}},
+    ground(c){const{g,w,gy,worldH,k,night}=c;g.fillStyle='rgba(255,255,255,.9)';for(let i=0;i<5;i++){const x=w*(i/4),y=worldH-6*k;g.beginPath();g.ellipse(x,y,70*k,20*k,0,0,7);g.fill();}
+      const l=w*0.1,r2=w*0.9;g.fillStyle=night?'#4A3B33':'#7A5A45';g.beginPath();g.moveTo(l,gy);g.lineTo(r2,gy);g.lineTo(w*0.62,worldH+4);g.lineTo(w*0.5,worldH+30);g.lineTo(w*0.38,worldH+4);g.fill();
+      g.fillStyle=night?'#22402B':'#8DC274';g.beginPath();g.ellipse(w/2,gy,(r2-l)/2,10*k,0,0,7);g.fill();
+      g.fillStyle='rgba(120,180,240,.8)';g.fillRect(w*0.8,gy+4*k,3*k,worldH-gy);}}};
+const ACH=[
+  {k:'play1',name:'Green thumb',desc:'Play for 1 hour',v:s=>s.stats.playSecs/3600,goal:1,unit:'h',bg:'sill'},
+  {k:'days3',name:'Coming back',desc:'Play on 3 different days',v:s=>s.stats.days,goal:3,unit:'days'},
+  {k:'water100',name:'Rainmaker',desc:'Water your plant 100 times',v:s=>s.stats.waters,goal:100,bg:'dunes'},
+  {k:'days7',name:'A week of care',desc:'Play on 7 different days',v:s=>s.stats.days,goal:7,unit:'days',bg:'greenhouse'},
+  {k:'play10',name:'Patient gardener',desc:'Play for 10 hours',v:s=>s.stats.playSecs/3600,goal:10,unit:'h',bg:'lake'},
+  {k:'asc1',name:'New beginnings',desc:'Ascend once',v:s=>s.asc,goal:1},
+  {k:'mut1',name:'Odd one out',desc:'Find a mutation',v:s=>s.mutSeen.length,goal:1,bg:'orchard'},
+  {k:'lvl30',name:'Towering',desc:'Reach level 30',v:s=>s.best,goal:30},
+  {k:'neighbor',name:'Good neighbor',desc:'Water other plants 25 times',v:s=>s.stats.wateredOthers,goal:25},
+  {k:'helpers20',name:'Generous',desc:'Send 20 helpers',v:s=>s.stats.helpersSent,goal:20},
+  {k:'play50',name:'Devoted',desc:'Play for 50 hours',v:s=>s.stats.playSecs/3600,goal:50,unit:'h',bg:'forest'},
+  {k:'finder',name:'Naturalist',desc:'Discover every helper',v:s=>H_KEYS.filter(x=>s.found[x]).length,goal:6},
+  {k:'days30',name:'Seasons pass',desc:'Play on 30 different days',v:s=>s.stats.days,goal:30,unit:'days',bg:'snow'},
+  {k:'asc10',name:'Skyward',desc:'Ascend 10 times',v:s=>s.asc,goal:10,bg:'island'},
+  {k:'leaves',name:'Collector',desc:'Unlock every leaf type',v:s=>s.owned.leaf.length,goal:Object.keys(LEAVES).length},
+  {k:'play200',name:'Ancient roots',desc:'Play for 200 hours',v:s=>s.stats.playSecs/3600,goal:200,unit:'h',bg:'space'}];
+const bgUnlocked=k=>k==='meadow'||ACH.some(a=>a.bg===k&&state.ach[a.k]);
+function checkAch(){let any=false;for(const a of ACH){if(state.ach[a.k]||a.v(state)<a.goal)continue;state.ach[a.k]=Date.now();any=true;
+    toast(`Achievement: ${a.name}.${a.bg?` New background: ${BGS[a.bg].name}. Pick it in the Look tab.`:''}`);}
+  if(any){saveSoon();buildLook();}}
+/* play time counts only while the game is open and on screen; days are local calendar days */
+function trackPlay(dt){if(document.hidden)return;state.stats.playSecs+=Math.min(dt,10);const d=new Date();const key=`${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
+  if(state.stats.lastDay!==key){state.stats.lastDay=key;state.stats.days++;}}
+function drawScene(c,B,skyD,phase){const g=c.g;
+  if(phase==='back'){if(B.back)B.back(c);}
+  else if(phase==='ground'){B.ground?B.ground(c):BGS.meadow.ground(c);if(c.night&&!B.noTint){g.fillStyle='rgba(10,20,45,.45)';g.fillRect(0,c.sy,c.w,c.h);}}
+  else if(phase==='front'){if(B.front)B.front(c);}
+  else if(phase==='overlay'){if(B.overlay)B.overlay(c);}}
+function bgThumb(cv,key){const B=BGS[key],g=cv.getContext('2d'),w=cv.width,h=cv.height;const d=B.sky?B.sky(['#6FB9EC','#CDEAF8',false,'#2C5FA0']):['#6FB9EC','#CDEAF8',false,'#2C5FA0'];
+  const sk=g.createLinearGradient(0,0,0,h);sk.addColorStop(0,d[0]);sk.addColorStop(1,d[1]);g.fillStyle=sk;g.fillRect(0,0,w,h);
+  const c={g,w,h,sy:0,worldH:h,gy:h*0.74,t:0,night:!!d[2],k:w/420*1.6};for(const ph of['back','ground','front'])drawScene(c,B,d,ph);
+  g.fillStyle='#B8643E';g.fillRect(w/2-5,c.gy-9,10,9);g.fillStyle='#4FA34A';g.beginPath();g.ellipse(w/2-4,c.gy-13,5,3,-0.6,0,7);g.ellipse(w/2+4,c.gy-14,5,3,0.6,0,7);g.fill();
+  drawScene(c,B,d,'overlay');}
 function drawHero(t){const sc=$('#heroScroll'),cv=$('#hero');const{g,w,h}=fit(cv);const L=heroLayout(w,h);
   const sp=$('#heroSpacer'),want=(L.worldH-h)+'px';if(sp.style.height!==want)sp.style.height=want;
   if(wantFocus&&w>0){wantFocus=false;focusGrowth(false);}
-  const sy=clamp(sc.scrollTop,0,Math.max(0,L.worldH-h));const[top,bot,night,deep]=skyColors();
+  const sy=clamp(sc.scrollTop,0,Math.max(0,L.worldH-h));const B=BGS[state.bg]||BGS.meadow;const skyD=B.sky?B.sky(skyColors()):skyColors();const[top,bot,night,deep]=skyD;
+  const sc2={g,w,h,sy,worldH:L.worldH,gy:L.groundY-6,t,night,k:Math.min(1.3,w/420)};
   g.save();g.translate(0,-sy);
   const sk=g.createLinearGradient(0,0,0,L.worldH);sk.addColorStop(0,L.worldH>h*1.6?deep:top);sk.addColorStop(Math.max(0,1-h/L.worldH),top);sk.addColorStop(1,bot);
   g.fillStyle=sk;g.fillRect(0,sy,w,h);
   // clouds spread through the whole sky
-  if(!night){g.fillStyle='rgba(255,255,255,.85)';const r=rng(11);const n=Math.ceil(L.worldH/220);
+  drawScene(sc2,B,skyD,'back');
+  if(!night&&!B.noClouds){g.fillStyle='rgba(255,255,255,.85)';const r=rng(11);const n=Math.ceil(L.worldH/220);
     for(let i=0;i<n;i++){const y=L.worldH-120-i*220-r()*80;if(y<sy-40||y>sy+h+40||y>L.groundY-90)continue;const x=((t*0.006*(0.6+r())+r()*900)%(w+200))-100;
       g.beginPath();g.ellipse(x,y,38,13,0,0,7);g.ellipse(x+26,y-8,24,13,0,0,7);g.ellipse(x-24,y-4,20,10,0,0,7);g.fill();}}
-  const gy=L.groundY-6;g.fillStyle=night?'#22402B':'#8DC274';g.beginPath();g.moveTo(0,gy-30);g.quadraticCurveTo(w*0.3,gy-70,w*0.6,gy-34);g.quadraticCurveTo(w*0.85,gy-10,w,gy-40);g.lineTo(w,L.worldH);g.lineTo(0,L.worldH);g.fill();
-  g.fillStyle=night?'#1A3322':'#6FA65A';g.fillRect(0,gy,w,L.worldH-gy);
+  const gy=L.groundY-6;drawScene(sc2,B,skyD,'ground');
   const sx=shake>0?Math.sin(t*0.08)*shake*3:0;shake=Math.max(0,shake-0.03);
-  drawPlant(g,L.P,w/2+sx,L.groundY,L.unit,t);
+  drawPlant(g,L.P,w/2+sx,L.groundY,L.unit,t);drawScene(sc2,B,skyD,'front');
   for(let i=drops.length-1;i>=0;i--){const d=drops[i];d.y+=d.v;d.v+=0.25;g.fillStyle='rgba(120,180,240,.85)';g.beginPath();g.ellipse(d.x,d.y,2.2,4.5,0,0,7);g.fill();if(d.y>Math.min(gy,sy+h+10))drops.splice(i,1);}
   g.restore();
   // sky ornaments fixed to the view
   const stars=night||(L.worldH>h*1.6&&sy<L.worldH*0.25);
   if(stars){const r=rng(7);for(let i=0;i<40;i++){g.globalAlpha=(night?1:0.6)*(0.3+0.5*Math.abs(Math.sin(t*0.001+i)));g.fillStyle='#fff';g.fillRect(r()*w,r()*h*0.7,1.6,1.6);}g.globalAlpha=1;}
-  if(night){g.fillStyle='#F3EFD8';g.beginPath();g.arc(w*0.85,40,18,0,7);g.fill();g.fillStyle=top;g.beginPath();g.arc(w*0.85+8,36,16,0,7);g.fill();}
+  if(B.noSun){}else if(night){g.fillStyle='#F3EFD8';g.beginPath();g.arc(w*0.85,40,18,0,7);g.fill();g.fillStyle=top;g.beginPath();g.arc(w*0.85+8,36,16,0,7);g.fill();}
   else{g.fillStyle='rgba(255,236,150,.95)';g.beginPath();g.arc(w*0.85,44,22,0,7);g.fill();}
+  drawScene({g,w,h,sy:0,worldH:h,gy:h,t,night,k:sc2.k},B,skyD,'overlay');
   const jb=$('#jumpBtn');const off=L.growTop<sy||L.growTop>sy+h*0.85;if(jb.hidden===off)jb.hidden=!off;}
 
 /* ---------- garden & clans ---------- */
@@ -615,7 +740,7 @@ function nameOf(id){const p=players.get(id);return p?p.name:'a plant';}
 async function waterOther(){const id=selected;if(!online||!id||id===myId)return;if(Date.now()-(state.lastWater[id]||0)<WATER_CD)return;
   state.lastWater[id]=Date.now();const rw=helpReward(10);
   const cell=gardenCells.find(c=>c.id===id);if(cell)for(let i=0;i<22;i++)gardenDrops.push({x:cell.x+cell.w*(0.3+Math.random()*0.4),y:cell.y+10+Math.random()*30,v:Math.random()*2,stop:cell.y+cell.h-40});
-  toast(`You watered ${nameOf(id)}.${helpNote(rw)}`);renderCard();saveSoon();
+  state.stats.wateredOthers++;toast(`You watered ${nameOf(id)}.${helpNote(rw)}`);renderCard();saveSoon();
   try{await db.doc(`drops/${id}__${myId}`).set({to:id,from:myId,at:Date.now()});}catch(e){dbError(e);}}
 function handleDrops(snap){let got=0;for(const d of snap.docs){const v=d.data()||{};const from=String(v.from||'');const at=+v.at||0;
   if(!from||from===myId||v.to!==myId)continue;if(at>(state.dropSeen[from]||0)&&at<=Date.now()+60000){state.dropSeen[from]=at;state.moisture=Math.min(100,state.moisture+35);got++;
@@ -639,7 +764,7 @@ async function sendGift(k,to){const H=HELPERS[k];if(!H||!online||!to||to===myId)
   const a=state.stock[k],ri=a.indexOf(true),rare=ri>=0;a.splice(rare?ri:0,1);if(a.length===STOCK_CAP-1)state.stockTs[k]=Date.now();
   const id=`${to}__${myId}__${k}`,doc={to,from:myId,type:k,rare,at:Date.now(),status:'sent',name:myName||state.plantName};
   sentDocs.set(id,Object.assign({id},doc));saveSoon();refreshClanButtons();renderCard();
-  try{await db.doc(`gifts/${id}`).set(doc);toast(`${aName(k,rare).replace(/^./,c=>c.toUpperCase())} is on its way to ${p.name}.`);}
+  try{await db.doc(`gifts/${id}`).set(doc);state.stats.helpersSent++;saveSoon();toast(`${aName(k,rare).replace(/^./,c=>c.toUpperCase())} is on its way to ${p.name}.`);}
   catch(e){sentDocs.delete(id);a.push(rare);dbError(e);toast('That didn’t go through. Try again in a moment.');refreshClanButtons();}}
 async function recallGift(id){const d=sentDocs.get(id);if(!d||!['sent','queued'].includes(d.status))return;
   const{id:_,...rest}=d;try{await db.doc(`gifts/${id}`).set(Object.assign({},rest,{status:'recalled',updatedAt:Date.now()}));}
@@ -794,7 +919,7 @@ function drawClanTree(t){const cv=$('#treeCv');if(!cv||!subClanId)return;const{g
 
 /* ---------- UI ---------- */
 function spawnHeroDrops(n){const w=$('#hero').getBoundingClientRect().width,sy=$('#heroScroll').scrollTop;for(let i=0;i<n;i++)drops.push({x:w/2+(Math.random()-0.5)*w*0.35,y:sy-10-Math.random()*80,v:2+Math.random()*2});}
-function water(){if(state.moisture<95){state.waterCount++;const h=new Date().getHours();if(h<6||h>=20)state.nightWaters++;}state.moisture=100;spawnHeroDrops(26);saveSoon();checkFinds();}
+function water(){if(state.moisture<95){state.waterCount++;state.stats.waters++;const h=new Date().getHours();if(h<6||h>=20)state.nightWaters++;}state.moisture=100;spawnHeroDrops(26);saveSoon();checkFinds();}
 function setStatus(){const ab=$('#authBtn');if(ab){ab.hidden=!auth;ab.textContent=myId?'Sign out':'Sign in with Google';}
   $('#statusTxt').textContent=online?`${players.size||1} plant${players.size===1?'':'s'} in the garden`:'Playing on this device';}
 function buildGrow(){let h=`<h2>Feed your plant</h2><p class="note" id="rateNote"></p>`;
@@ -813,7 +938,16 @@ function buildLook(){let h=`<h2>Name</h2><div class="namefield"><input id="nameI
       const sw=cat==='stem'?`<span class="sw" style="background:linear-gradient(${it.light},${it.dark})"></span>`:cat==='flower'?`<canvas data-icon="flower:${k}" width="56" height="56"></canvas>`:`<span class="sw" style="background:${it.c}"></span>`;
       h+=`<button class="chip ${own?'':'locked'}" data-cos="${cat}" data-key="${k}" aria-pressed="${state[cat]===k}">${sw}${it.name}${own?'':` <span class="cost">${it.cost} seeds</span>`}</button>`;}
     h+=`</div>`;}
-  h+=`<p class="note" style="margin-top:12px">Colors, flowers and pots are bought with seeds from ascending.</p>`;$('#p-look').innerHTML=h;buildIcons();}
+  h+=`<p class="note" style="margin-top:12px">Colors, flowers and pots are bought with seeds from ascending.</p>`;
+  h+=`<h2>Background</h2><p class="note">New backgrounds come from achievements.</p><div class="bgs">`;
+  for(const k in BGS){const un=bgUnlocked(k),a=ACH.find(x=>x.bg===k);
+    h+=`<button class="bgc ${un?'':'locked'}" data-bg="${k}" aria-pressed="${state.bg===k}"><canvas data-bgthumb="${k}" width="192" height="120"></canvas><span>${un?BGS[k].name:'Locked'}</span>${un?'':`<small>${esc(a?a.name:'')}</small>`}</button>`;}
+  h+=`</div><h2>Achievements</h2><p class="note">${Object.keys(state.ach).length} of ${ACH.length} done.</p><div id="achList">${achHtml()}</div>`;
+  $('#p-look').innerHTML=h;buildIcons();
+  document.querySelectorAll('canvas[data-bgthumb]').forEach(cv=>{const k=cv.dataset.bgthumb;if(bgUnlocked(k))bgThumb(cv,k);else{const g=cv.getContext('2d');g.fillStyle='#9AA79F';g.fillRect(0,0,cv.width,cv.height);g.fillStyle='#fff';g.font='700 44px Karla,sans-serif';g.textAlign='center';g.fillText('?',cv.width/2,cv.height/2+15);}});}
+function achHtml(){return ACH.map(a=>{const done=!!state.ach[a.k],v=Math.min(a.goal,a.v(state)),fmtv=x=>a.unit==='h'?(x<10?x.toFixed(1):Math.floor(x)):Math.floor(x);
+  return`<div class="ach ${done?'done':''}"><div class="txt"><b>${done?'✓ ':''}${esc(a.name)}</b><p>${esc(a.desc)}${a.bg?`. Unlocks the ${esc(BGS[a.bg].name.toLowerCase())} background`:''}.</p>
+    ${done?'':`<div class="prog small"><i style="width:${(v/a.goal*100).toFixed(1)}%"></i></div><p>${fmtv(v)} of ${a.goal}${a.unit?' '+a.unit:''}</p>`}</div></div>`;}).join('');}
 function buildIcons(){document.querySelectorAll('canvas[data-icon]').forEach(c=>{const[cat,k]=c.dataset.icon.split(':');const g=c.getContext('2d');const S=c.width;g.clearRect(0,0,S,S);
   g.save();g.scale(S/56,S/56);g.translate(28,28);
   if(cat==='leaf'){const L=['willow','palm'].includes(k)?26:['clover','needle'].includes(k)?36:38;g.rotate(-Math.PI/4);g.translate(-L*0.5,0);drawLeaf(g,k,L,STEMS[state.stem].leaf[0]);}
@@ -880,6 +1014,8 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
   if(b.dataset.leaf){const k=b.dataset.leaf;if(!has(LEAVES,k))return;if(!state.owned.leaf.includes(k)){if(state.asc<LEAVES[k].life){toast(`${LEAVES[k].name} leaves open up after ${LEAVES[k].life} ascension${LEAVES[k].life>1?'s':''}.`);return;}const c=leafCost(k);if(state.sap<c){toast(`${LEAVES[k].name} leaves cost ${fmt(c)} sap.`);return;}
       state.sap-=c;state.owned.leaf.push(k);state.leavesBought++;toast(`Unlocked ${LEAVES[k].name.toLowerCase()} leaves.`);}
     state.leaf=k;buildLook();refresh();saveSoon();maybePublish();return;}
+  if(b.dataset.bg){const k=b.dataset.bg;if(!bgUnlocked(k)){const a=ACH.find(x=>x.bg===k);toast(`Unlocked by the achievement “${a?a.name:''}”: ${a?a.desc.toLowerCase():''}.`);return;}
+    state.bg=k;saveSoon();buildLook();return;}
   if(b.dataset.cos){const cat=b.dataset.cos,k=b.dataset.key,it=COSMETICS[cat][k];if(!state.owned[cat].includes(k)){if(state.seeds<it.cost){toast(`${it.name} costs ${it.cost} seeds.`);return;}
       state.seeds-=it.cost;state.owned[cat].push(k);}
     state[cat]=k;buildLook();refresh();saveSoon();maybePublish();}});
@@ -893,10 +1029,10 @@ $('#garden').addEventListener('click',e=>{const r=e.currentTarget.getBoundingCli
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{gardenColors=null;});
 
 /* ---------- loops ---------- */
-let lastHelperTick=0,lastRemote=Date.now(),lastPubBeat=Date.now(),lastLocal=Date.now(),lastCard=0;
+let lastHelperTick=Date.now(),lastRemote=Date.now(),lastPubBeat=Date.now(),lastLocal=Date.now(),lastCard=0;
 function tick(){const now=Date.now();let dt=(now-state.ts)/1000;if(dt>30){catchUp(true);}else if(dt>0){const ups=step(state,dt,now);state.ts=now;
     if(ups){toast(`${state.plantName} reached level ${state.level}.`);buildGrow();buildAscend();maybePublish();}}
-  if(now-lastHelperTick>5000){lastHelperTick=now;regenStock(now);checkFinds();if(state.visitors.some(v=>v.until<=now))processIncoming();}
+  if(now-lastHelperTick>5000){trackPlay((now-lastHelperTick)/1000);lastHelperTick=now;checkAch();regenStock(now);checkFinds();if(state.visitors.some(v=>v.until<=now))processIncoming();}
   refresh();if(now-lastLocal>5000){lastLocal=now;saveLocal();}
   if(now-lastRemote>60000){lastRemote=now;saveRemote();}
   if(now-lastPubBeat>120000){lastPubBeat=now;publishGarden();}
