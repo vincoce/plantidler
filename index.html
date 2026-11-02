@@ -155,7 +155,9 @@ h1{font-family:"Bagel Fat One","Arial Black",sans-serif;font-weight:400;font-siz
 .ach.done b{color:var(--accent)}
 .prog.small{height:8px;margin:6px 0 2px}
 .bottlebox{display:flex;gap:12px;align-items:center;margin-bottom:10px;padding:10px;border:1px solid var(--line);border-radius:14px;background:var(--surface2)}
-.bottlebox canvas{width:60px;height:120px;flex:none}
+.bottlewrap{display:grid;justify-items:center;gap:2px;flex:none}
+.bottlebox canvas{width:66px;height:132px}
+#bottleCount{font-weight:700;font-size:14px;font-variant-numeric:tabular-nums}
 .bottlebox .txt{flex:1;min-width:0}.bottlebox p{margin:2px 0 6px;font-size:14px;color:var(--muted)}
 .sys{justify-self:center;text-align:center;font-size:13px;color:var(--muted);padding:2px 8px}
 .sys time{font-size:11px;opacity:.7;margin-left:4px}
@@ -232,7 +234,7 @@ h1{font-family:"Bagel Fat One","Arial Black",sans-serif;font-weight:400;font-siz
 
 <script type="module">// Firebase is loaded on demand in boot(), so the game still runs if it can't load.
 const FB='https://www.gstatic.com/firebasejs/10.12.2/';
-let fdel,forder,flimit,initializeApp,getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,onAuthStateChanged,signOut,getFirestore,fdoc,setDoc,getDoc,fcol,query,fwhere,fsnap;
+let fupd,finc,fdel,forder,flimit,initializeApp,getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,onAuthStateChanged,signOut,getFirestore,fdoc,setDoc,getDoc,fcol,query,fwhere,fsnap;
 
 /* ---------- data ---------- */
 const STEMS={
@@ -896,14 +898,14 @@ function buildClan(){const el=$('#p-clan');if(!el)return;const keep=$('#clanName
   for(const p of ms){const you=p.id===me;
     h+=`<div class="member"><b>${esc(p.name)}</b><span class="lv">Lv ${p.level}</span><p>${you?'You':esc(names[p.id]||'Someone')}${giftList(p)?`, ${giftList(p)}`:''}.${!you&&isActive(p)?' <span class="on">● Active now</span>':''}</p>${you?'':giftButtons(p.id)}</div>`;}
   if(ms.length<2)h+=`<p class="note">Share this page with friends so they can join ${esc(mine.name)}.</p>`;
-  h+=`<h2>Clan chat</h2><div class="bottlebox"><canvas id="bottleCv" width="120" height="240" aria-label="The clan bottle"></canvas><div class="txt"><b>Cave Bitter</b><p id="bottleNote">A dark herbal coffee bitter for after a long day underground.</p><div class="donate"><button class="buy" id="sipBtn">Take a sip</button><button class="buy" id="cheersBtn">Raise a glass</button></div><p class="note" id="bottleWho"></p></div></div><div class="chat" id="chatList"></div><div class="namefield"><input id="chatIn" maxlength="300" placeholder="Message your clan" aria-label="Message" value="${esc(keepChat)}"><button class="buy go" id="chatSend">Send</button></div>`;
+  h+=`<h2>Clan chat</h2><div class="bottlebox"><div class="bottlewrap"><canvas id="bottleCv" width="120" height="240" aria-label="The clan bottle"></canvas><span id="bottleCount"></span></div><div class="txt"><b>Cave Bitter</b><p id="bottleNote">A dark herbal coffee bitter for after a long day underground.</p><div class="donate"><button class="buy" id="sipBtn">Take a sip</button><button class="buy" id="cheersBtn">Raise a glass</button></div><p class="note" id="bottleWho"></p></div></div><div class="chat" id="chatList"></div><div class="namefield"><input id="chatIn" maxlength="300" placeholder="Message your clan" aria-label="Message" value="${esc(keepChat)}"><button class="buy go" id="chatSend">Send</button></div>`;
   h+=`<button class="linkish" id="leaveClan">Leave ${esc(mine.name)}</button>`;el.innerHTML=h;leaveArm=0;buildIcons();subscribeClan();renderTreeInfo();renderChat();renderBottle();updateUnread();}
 
 /* ---------- clan tree and chat ---------- */
 let treeDocs=new Map(),chatMsgs=[],clanUnsubs=[],subClanId=null,lastChatSend=0,chatSeenAt=0;
 function treeTotal(){let n=0;for(const v of treeDocs.values())n+=v.total;return n;}
 function treeLevel(){const T=treeTotal();let n=0;while(n<TREE_MAX&&treeNeed(n+1)<=T)n++;return n;}
-function unsubClan(){clanUnsubs.forEach(f=>{try{f();}catch(e){}});clanUnsubs=[];treeDocs=new Map();chatMsgs=[];subClanId=null;clanTreeLv=0;updateUnread();}
+function unsubClan(){bottleDoc=null;bottleShown=null;clanUnsubs.forEach(f=>{try{f();}catch(e){}});clanUnsubs=[];treeDocs=new Map();chatMsgs=[];subClanId=null;clanTreeLv=0;updateUnread();}
 function subscribeClan(){if(!online||!db||!state.clan){if(subClanId)unsubClan();return;}if(subClanId===state.clan)return;unsubClan();
   const cid=state.clan;subClanId=cid;
   /* membership may not be saved yet right after joining, so a refused listener retries a few times */
@@ -915,6 +917,7 @@ function subscribeClan(){if(!online||!db||!state.clan){if(subClanId)unsubClan();
     const mine=(state.treeGiven||{})[cid]||0;if(myId&&mine>((m.get(myId)||{}).total||0))m.set(myId,{total:mine});
     treeDocs=m;const lv=treeLevel();if(lv>clanTreeLv&&!first)toast(`The clan tree grew to level ${lv}.`);first=false;clanTreeLv=lv;renderTreeInfo();});
   let firstChat=true;
+  watch(()=>db.doc(`clans/${cid}/bottle/main`),sn=>{if(subClanId!==cid)return;bottleDoc=sn.exists?(sn.data()||null):null;renderBottle();});
   watch(()=>db.collection(`clans/${cid}/msgs`).orderBy('at','desc').limit(60),sn=>{if(subClanId!==cid)return;
     const old=new Set(chatMsgs.map(m=>m.id));
     chatMsgs=sn.docs.filter(d=>d.exists).map(d=>{const v=d.data()||{};return{id:d.id,from:String(v.from||''),name:typeof v.name==='string'?v.name.slice(0,30):'',
@@ -934,40 +937,58 @@ function renderChat(){const el=$('#chatList');if(!el)return;const near=el.scroll
     :'<p class="note" style="margin:6px">No messages yet. Say hello to your clan.</p>';
   if(near)el.scrollTop=el.scrollHeight;el.dataset.ready='1';}
 /* ---------- the clan bottle: everyone shares one; sips and new bottles are chat messages ---------- */
-const BOTTLE_SIPS=15,SIP_CD=3*60*1000,CHEERS=['Jó szerencsét!','Egészségedre!','To the next cave!','Cheers!','Lights on, ropes tight!','To whoever carried the rope bag!'];
+const BOTTLE_SIPS=10,SIP_CD=3*60*1000,CHEERS=['Jó szerencsét!','Egészségedre!','To the next cave!','Cheers!','Lights on, ropes tight!','To whoever carried the rope bag!'];
 let clink=0,tipsyUntil=0;
 function sysText(m,who){if(m.kind==='sip')return`${who} took a sip of Cave Bitter.`;if(m.kind==='open')return`${who} opened a new bottle.`;return`${who} raised a glass: ${m.text}`;}
-function bottleState(){let open=-1;for(let i=chatMsgs.length-1;i>=0;i--)if(chatMsgs[i].kind==='open'){open=i;break;}
-  const since=chatMsgs.slice(open+1),sips=since.filter(m=>m.kind==='sip').length,now=Date.now();
+/* The bottle's level is one shared document: clans/<id>/bottle/main = {sips, n}. Each sip adds 1 with an atomic increment,
+   and the rules refuse a sip from an empty bottle, so two people drinking at once can never undo each other. */
+let bottleDoc=null;
+function bottleState(){const sips=bottleDoc?clamp(+bottleDoc.sips||0,0,BOTTLE_SIPS):0,now=Date.now();
   const recent=[...new Set(chatMsgs.filter(m=>m.kind==='sip'&&now-m.at<30*60*1000).map(m=>m.from))];
   return{left:Math.max(0,BOTTLE_SIPS-sips),recent};}
 function lastSipAt(){try{return+(localStorage.getItem('leafbloom:sip:'+myId)||0);}catch(e){return 0;}}
 function renderBottle(){const cv=$('#bottleCv');if(!cv)return;const b=bottleState(),cd=lastSipAt()+SIP_CD-Date.now();
-  $('#bottleNote').textContent=b.left?`${b.left} of ${BOTTLE_SIPS} sips left in the bottle.`:'The bottle is empty.';
+  $('#bottleNote').textContent=b.left?`${b.left} of ${BOTTLE_SIPS} sips left in the bottle.`:'The bottle is empty.';const bc=$('#bottleCount');if(bc)bc.textContent=`${b.left}/${BOTTLE_SIPS}`;
   const sb=$('#sipBtn');if(b.left){sb.textContent=cd>0?`Next sip in ${mins(cd)} min`:'Take a sip';sb.disabled=cd>0||!online;sb.dataset.open='';}
   else{sb.textContent='Open a new bottle';sb.disabled=!online;sb.dataset.open='1';}
   const who=b.recent.map(id=>id===myId?'you':(names[id]||'someone'));$('#bottleWho').textContent=who.length?`Drinking now: ${who.join(', ')}.`:'Nobody is drinking right now.';}
-function drawBottle(t){const cv=$('#bottleCv');if(!cv)return;const{g,w,h}=fit(cv);g.clearRect(0,0,w,h);const left=bottleState().left/BOTTLE_SIPS;
-  const cx=w/2,bw=w*0.46,top=h*0.2,neckW=w*0.16,base=h*0.96,sh=h*0.34,wob=Date.now()-clink<1500?Math.sin(t*0.03)*0.06*(1-(Date.now()-clink)/1500):0;
+let bottleShown=null,sipFx=0;
+function drawBottle(t){const cv=$('#bottleCv');if(!cv)return;const{g,w,h}=fit(cv);g.clearRect(0,0,w,h);
+  const target=bottleState().left/BOTTLE_SIPS;if(bottleShown===null)bottleShown=target;
+  if(target<bottleShown-0.001)sipFx=Date.now();bottleShown+=(target-bottleShown)*0.06;if(Math.abs(target-bottleShown)<0.002)bottleShown=target;const left=bottleShown;
+  const cx=w/2,bw=w*0.5,top=h*0.12,neckW=w*0.17,base=h*0.97,sh=h*0.32,wob=Date.now()-clink<1500?Math.sin(t*0.03)*0.06*(1-(Date.now()-clink)/1500):0;
   g.save();g.translate(cx,base);g.rotate(wob);g.translate(-cx,-base);
   const body=()=>{g.beginPath();g.moveTo(cx-neckW/2,top);g.lineTo(cx-neckW/2,sh-h*0.04);g.quadraticCurveTo(cx-bw/2,sh,cx-bw/2,sh+h*0.08);g.lineTo(cx-bw/2,base-6);
     g.quadraticCurveTo(cx-bw/2,base,cx-bw/2+6,base);g.lineTo(cx+bw/2-6,base);g.quadraticCurveTo(cx+bw/2,base,cx+bw/2,base-6);g.lineTo(cx+bw/2,sh+h*0.08);
     g.quadraticCurveTo(cx+bw/2,sh,cx+neckW/2,sh-h*0.04);g.lineTo(cx+neckW/2,top);g.closePath();};
-  body();g.fillStyle='rgba(60,40,25,.35)';g.fill();
-  g.save();body();g.clip();const fillTop=base-(base-sh)*left*1.02;const lg=g.createLinearGradient(0,fillTop,0,base);lg.addColorStop(0,'#5A2E12');lg.addColorStop(1,'#2A1206');
-  g.fillStyle=lg;g.fillRect(0,fillTop+Math.sin(t*0.004)*1.5,w,h);g.fillStyle='rgba(255,255,255,.18)';g.fillRect(cx-bw/2+5,top,4,h);g.restore();
-  body();g.strokeStyle='rgba(30,20,10,.75)';g.lineWidth=2;g.stroke();
+  /* clear glass so the level is easy to see */
+  body();g.fillStyle='rgba(225,235,230,.35)';g.fill();
+  g.save();body();g.clip();const full=sh+h*0.04,fillTop=base-(base-full)*left;const lg=g.createLinearGradient(0,fillTop,0,base);lg.addColorStop(0,'#6B3714');lg.addColorStop(1,'#2A1206');
+  g.fillStyle=lg;g.beginPath();g.moveTo(0,fillTop);for(let x=0;x<=w;x+=4)g.lineTo(x,fillTop+Math.sin(x*0.15+t*0.006)*1.2);g.lineTo(w,h);g.lineTo(0,h);g.fill();
+  g.fillStyle='rgba(255,255,255,.22)';g.fillRect(cx-bw/2+5,top,4,h);g.restore();
+  body();g.strokeStyle='rgba(30,20,10,.7)';g.lineWidth=2;g.stroke();
+  /* tick marks, one per sip */
+  g.strokeStyle='rgba(30,20,10,.35)';g.lineWidth=1;for(let i=1;i<BOTTLE_SIPS;i++){const y=base-(base-full)*i/BOTTLE_SIPS;g.beginPath();g.moveTo(cx+bw/2-7,y);g.lineTo(cx+bw/2-2,y);g.stroke();}
   g.fillStyle='#8A5A2B';g.fillRect(cx-neckW/2-2,top-h*0.06,neckW+4,h*0.07);g.fillStyle='#C9822A';g.fillRect(cx-neckW/2-3,top-h*0.015,neckW+6,h*0.03);
-  const ly=sh+h*0.16,lh=h*0.24;g.fillStyle='#EFE3C6';g.fillRect(cx-bw/2+4,ly,bw-8,lh);g.strokeStyle='#C9822A';g.lineWidth=1.5;g.strokeRect(cx-bw/2+7,ly+3,bw-14,lh-6);
-  g.fillStyle='#2A1A10';g.beginPath();const by=ly+lh*0.3,bs=bw*0.13;g.moveTo(cx,by+bs*0.25);g.quadraticCurveTo(cx-bs*0.9,by-bs*0.6,cx-bs*2,by-bs*0.1);g.quadraticCurveTo(cx-bs*1.4,by+bs*0.1,cx-bs*1.3,by+bs*0.5);
+  /* small label low on the bottle */
+  const ly=base-h*0.2,lh=h*0.15,lw=bw*0.78;g.fillStyle='#EFE3C6';g.fillRect(cx-lw/2,ly,lw,lh);g.strokeStyle='#C9822A';g.lineWidth=1.2;g.strokeRect(cx-lw/2+2,ly+2,lw-4,lh-4);
+  g.fillStyle='#2A1A10';const by=ly+lh*0.32,bs=lw*0.1;g.beginPath();g.moveTo(cx,by+bs*0.25);g.quadraticCurveTo(cx-bs*0.9,by-bs*0.6,cx-bs*2,by-bs*0.1);g.quadraticCurveTo(cx-bs*1.4,by+bs*0.1,cx-bs*1.3,by+bs*0.5);
   g.quadraticCurveTo(cx-bs*0.7,by+bs*0.1,cx,by+bs*0.55);g.quadraticCurveTo(cx+bs*0.7,by+bs*0.1,cx+bs*1.3,by+bs*0.5);g.quadraticCurveTo(cx+bs*1.4,by+bs*0.1,cx+bs*2,by-bs*0.1);
-  g.quadraticCurveTo(cx+bs*0.9,by-bs*0.6,cx,by+bs*0.25);g.fill();g.font=`700 ${Math.max(6,bw*0.15)}px Karla,sans-serif`;g.textAlign='center';g.fillText('CAVE',cx,ly+lh*0.74);g.fillText('BITTER',cx,ly+lh*0.9);
-  g.restore();}
+  g.quadraticCurveTo(cx+bs*0.9,by-bs*0.6,cx,by+bs*0.25);g.fill();g.font=`700 ${Math.max(5,lw*0.13)}px Karla,sans-serif`;g.textAlign='center';g.fillText('CAVE BITTER',cx,ly+lh*0.82);
+  g.restore();
+  /* "-1" floats up after a sip */
+  const age=Date.now()-sipFx;if(sipFx&&age<1400){g.globalAlpha=1-age/1400;g.fillStyle='#B4483A';g.font=`700 ${Math.round(w*0.16)}px Karla,sans-serif`;g.textAlign='center';g.fillText('−1',cx+bw*0.62,sh-age*0.03);g.globalAlpha=1;}}
 async function postKind(kind,text){const id=Date.now().toString(36)+Math.floor(Math.random()*1e8).toString(36);
   await db.doc(`clans/${state.clan}/msgs/${id}`).set({from:myId,name:myName||state.plantName,text,kind,at:Date.now()});}
+const bottleRef=()=>db.doc(`clans/${state.clan}/bottle/main`);
 async function sip(){if(!online||!state.clan)return;const b=bottleState();
-  if(!b.left){try{await postKind('open','opened a new bottle');toast('You opened a new bottle of Cave Bitter.');}catch(e){dbError(e);}return;}
-  if(Date.now()-lastSipAt()<SIP_CD)return;try{localStorage.setItem('leafbloom:sip:'+myId,String(Date.now()));}catch(e){}
+  if(!b.left){try{if(bottleDoc)await bottleRef().update({sips:0,n:db.inc(1),by:myId,at:Date.now()});else await bottleRef().set({sips:0,n:1,by:myId,at:Date.now()});
+      await postKind('open','opened a new bottle');toast('You opened a new bottle of Cave Bitter.');}catch(e){toast('Someone else just opened a new one.');}return;}
+  if(Date.now()-lastSipAt()<SIP_CD)return;
+  if(!bottleDoc){try{await bottleRef().set({sips:0,n:1,by:myId,at:Date.now()});}catch(e){}}
+  try{await bottleRef().update({sips:db.inc(1),by:myId,at:Date.now()});}
+  catch(e){console.warn('sip',e);toast('The bottle was just emptied by someone else.');return;}
+  try{localStorage.setItem('leafbloom:sip:'+myId,String(Date.now()));}catch(e){}
   clink=Date.now();tipsyUntil=Date.now()+90*1000;try{await postKind('sip','took a sip');}catch(e){dbError(e);}renderBottle();}
 async function cheers(){if(!online||!state.clan)return;if(Date.now()-lastChatSend<2000)return;lastChatSend=Date.now();clink=Date.now();
   try{await postKind('cheers',CHEERS[Math.floor(Math.random()*CHEERS.length)]);}catch(e){dbError(e);}}
@@ -1131,7 +1152,7 @@ let auth=null,unsubs=[];
 function makeDb(fs){
   const wrap=d=>({id:d.id,exists:d.exists(),data:()=>d.data()});
   const q=ref=>({where:(f,op,v)=>q(query(ref,fwhere(f,op,v))),orderBy:(f,d)=>q(query(ref,forder(f,d))),limit:n=>q(query(ref,flimit(n))),onSnapshot:(next,err)=>fsnap(ref,sn=>next({docs:sn.docs.map(wrap)}),err)});
-  return{doc:p=>{const r=fdoc(fs,PREFIX+p);return{set:data=>setDoc(r,data),del:()=>fdel(r),get:async()=>wrap(await getDoc(r)),onSnapshot:(next,err)=>fsnap(r,sn=>next(wrap(sn)),err)};},collection:p=>q(fcol(fs,PREFIX+p))};}
+  return{inc:n=>finc(n),doc:p=>{const r=fdoc(fs,PREFIX+p);return{set:data=>setDoc(r,data),update:data=>fupd(r,data),del:()=>fdel(r),get:async()=>wrap(await getDoc(r)),onSnapshot:(next,err)=>fsnap(r,sn=>next(wrap(sn)),err)};},collection:p=>q(fcol(fs,PREFIX+p))};}
 async function signIn(){const pr=new GoogleAuthProvider();
   try{await signInWithPopup(auth,pr);}catch(e){if(e&&(e.code==='auth/popup-blocked'||e.code==='auth/operation-not-supported-in-this-environment'))await signInWithRedirect(auth,pr);
     else if(e&&e.code!=='auth/popup-closed-by-user'&&e.code!=='auth/cancelled-popup-request')toast('Sign-in failed: '+(e.code||'unknown error'));}}
@@ -1179,7 +1200,7 @@ async function boot(){
   if(!firebaseConfig||!firebaseConfig.apiKey||String(firebaseConfig.apiKey).startsWith('PASTE')){showGate(true,'The game is not set up yet: fill in firebase-config.js.',false);return;}
   try{const[A,U,F]=await Promise.all([import(FB+'firebase-app.js'),import(FB+'firebase-auth.js'),import(FB+'firebase-firestore.js')]);
     ({initializeApp}=A);({getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,onAuthStateChanged,signOut}=U);
-    ({getFirestore,setDoc,getDoc,query,doc:fdoc,collection:fcol,where:fwhere,onSnapshot:fsnap,orderBy:forder,limit:flimit,deleteDoc:fdel}=F);}
+    ({getFirestore,setDoc,getDoc,query,doc:fdoc,collection:fcol,where:fwhere,onSnapshot:fsnap,orderBy:forder,limit:flimit,deleteDoc:fdel,updateDoc:fupd,increment:finc}=F);}
   catch(e){console.warn('Firebase failed to load',e);showGate(true,'Could not reach the game servers. Check your connection and refresh the page.',false);return;}
   const app=initializeApp(firebaseConfig);auth=getAuth(app);db=makeDb(getFirestore(app));setStatus();
   onAuthStateChanged(auth,u=>{if(u){if(myId!==u.uid||saveHold){showGate(!cached,'Loading your plant…',false);connect(u);}}else{disconnect();try{localStorage.removeItem('leafbloom:lastUid');}catch(e){}signedOut();}});}
