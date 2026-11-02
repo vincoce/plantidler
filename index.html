@@ -143,6 +143,7 @@ h1{font-family:"Bagel Fat One","Arial Black",sans-serif;font-weight:400;font-siz
 .hrow canvas,.hrow .qmark{width:36px;height:36px;flex:none}
 .hrow p{margin:0;font-size:13px;color:var(--muted)}
 .gifts{grid-template-columns:repeat(3,1fr)}
+.on{color:#2E9E45;font-weight:700;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -357,7 +358,7 @@ function dbError(e){const c=e&&e.code;console.warn('Firestore:',e);if(c==='permi
 const saveRemote=writer(async()=>{if(!online)return;await db.doc(`saves/${myId}`).set(JSON.parse(JSON.stringify(state)));});
 function summary(){const now=Date.now(),r=rates(state,now);return{name:state.plantName,leaf:state.leaf,flower:state.flower,stem:state.stem,
   petal:state.petal,pot:state.pot,level:state.level,asc:state.asc,bloom:state.up.bloom,moisture:Math.round(state.moisture),mts:now,net:+(r.rain-r.drain).toFixed(5),
-  seen:now,owner:myName,clan:state.clan||'',vis:state.visitors.filter(v=>v.until>now).map(v=>({t:v.type,r:!!v.rare,u:v.until})),home:Object.fromEntries(H_KEYS.map(k=>[k,state.stock[k].map(x=>x?1:0)])),tiers:state.tiers.slice(-60),mut:state.mut||''};}
+  seen:document.hidden?0:now,owner:myName,clan:state.clan||'',vis:state.visitors.filter(v=>v.until>now).map(v=>({t:v.type,r:!!v.rare,u:v.until})),home:Object.fromEntries(H_KEYS.map(k=>[k,state.stock[k].map(x=>x?1:0)])),tiers:state.tiers.slice(-60),mut:state.mut||''};}
 const pubKey=()=>[state.plantName,state.leaf,state.flower,state.stem,state.petal,state.pot,state.level,state.asc,state.up.bloom,state.clan,JSON.stringify(state.visitors.map(v=>v.key)),JSON.stringify(state.stock),state.tiers.length,state.mut].join('|');
 let lastPub='';
 const publishGarden=writer(async()=>{if(!online)return;const k=pubKey();await db.doc(`garden/${myId}`).set(summary());lastPub=k;});
@@ -580,7 +581,8 @@ function drawGarden(t){const cv=$('#garden');const list=gardenList();const W=cv.
     if(p.clan&&clans.has(p.clan)){const tag=clans.get(p.clan).name.slice(0,12);g.font='700 11px Karla, sans-serif';const tw=g.measureText(tag).width+12;
       g.fillStyle=clanColor(p.clan);g.beginPath();if(g.roundRect)g.roundRect(x+cw-tw-8,y+8,tw,18,9);else g.rect(x+cw-tw-8,y+8,tw,18);g.fill();
       g.fillStyle='#fff';g.fillText(tag,x+cw-tw/2-8,y+21);}
-    if(p.id===(myId||'me')){g.fillStyle=C.accent;g.font='700 11px Karla, sans-serif';g.textAlign='left';g.fillText('you',x+10,y+21);}});
+    if(p.id===(myId||'me')){g.fillStyle=C.accent;g.font='700 11px Karla, sans-serif';g.textAlign='left';g.fillText('you',x+10,y+21);}
+    else if(isActive(p)){g.fillStyle='#3FB950';g.beginPath();g.arc(x+15,y+17,5,0,7);g.fill();g.strokeStyle='rgba(255,255,255,.8)';g.lineWidth=1.5;g.stroke();}});
   for(let i=gardenDrops.length-1;i>=0;i--){const d=gardenDrops[i];d.y+=d.v;d.v+=0.25;g.fillStyle='rgba(120,180,240,.9)';g.beginPath();g.ellipse(d.x,d.y,2,4,0,0,7);g.fill();if(d.y>d.stop)gardenDrops.splice(i,1);}}
 function cleanPlant(id,d){const s=v=>typeof v==='string'?v:'';const pick=(o,k,def)=>has(o,k)?k:def;
   return{id,name:s(d.name).slice(0,18)||'Plant',leaf:pick(LEAVES,d.leaf,'round'),flower:pick(FLOWERS,d.flower,'daisy'),
@@ -590,6 +592,9 @@ function cleanPlant(id,d){const s=v=>typeof v==='string'?v:'';const pick=(o,k,de
 const numArr=(a,n)=>Array.isArray(a)?a.filter(x=>isFinite(x)).slice(0,n).map(Number):[];
 function giftList(p){const vis=p.visNow||(p.id===(myId||'me')?state.visitors.filter(v=>v.until>Date.now()).map(v=>({t:v.type})):[]);const out=[];
   for(const k of H_KEYS){const n=vis.filter(v=>v.t===k).length;if(n)out.push(`${n} ${n>1?HELPERS[k].plural:HELPERS[k].name.toLowerCase()}`);}return out.length?`visited by ${out.join(', ')}`:'';}
+/* a player counts as active while their game is open and visible (it checks in every 2 minutes) */
+const ACTIVE_MS=5*60*1000;
+const isActive=p=>p.id===(myId||'me')||(p.seen>0&&Date.now()-p.seen<ACTIVE_MS);
 function ago(ts){const m=Math.round((Date.now()-ts)/60000);if(m<2)return'just now';if(m<60)return`${m} min ago`;const h=Math.round(m/60);if(h<48)return`${h} h ago`;return`${Math.round(h/24)} days ago`;}
 function helperButtons(id){let h='<div class="gifts">';const now=Date.now();
   for(const k of H_KEYS){const H=HELPERS[k];
@@ -604,7 +609,7 @@ function renderCard(){const card=$('#gcard');if(!selected){card.hidden=true;retu
   if(selected===(myId||'me')){card.innerHTML=`<div class="txt"><b>${esc(state.plantName)}</b><p>This is your plant. Friends can water it, and clan mates can send it helpers once they’ve found some.</p></div>`;return;}
   const p=allPlants().find(x=>x.id===selected);if(!p){card.hidden=true;return;}
   const owner=names[p.id]||'Someone',cd=(state.lastWater[p.id]||0)+WATER_CD-Date.now(),cl=p.clan&&clans.get(p.clan);const mate=state.clan&&p.clan===state.clan;
-  card.innerHTML=`<div class="txt"><b>${esc(p.name)}</b><p>Grown by ${esc(owner)}${cl?` in ${esc(cl.name)}`:''}. Level ${p.level}, ${esc(LEAVES[p.leaf].name.toLowerCase())} leaves${p.asc?`, ascended ${p.asc}×`:''}. Soil ${Math.round(p.moisture)}%${giftList(p)?`, ${giftList(p)}`:''}. Seen ${ago(p.seen)}.</p>${mate?giftButtons(p.id):''}</div>
+  card.innerHTML=`<div class="txt"><b>${esc(p.name)}</b><p>Grown by ${esc(owner)}${cl?` in ${esc(cl.name)}`:''}. Level ${p.level}, ${esc(LEAVES[p.leaf].name.toLowerCase())} leaves${p.asc?`, ascended ${p.asc}×`:''}. Soil ${Math.round(p.moisture)}%${giftList(p)?`, ${giftList(p)}`:''}.${isActive(p)?' <span class="on">● Active now</span>':''}</p>${mate?giftButtons(p.id):''}</div>
     <div style="display:grid;gap:6px"><button class="buy ${cd<=0?'go':''}" id="waterOther" ${cd>0||!online?'disabled':''}>${cd>0?`Water in ${cdText(cd)}`:'Water it'}</button></div>`;buildIcons();}
 function nameOf(id){const p=players.get(id);return p?p.name:'a plant';}
 async function waterOther(){const id=selected;if(!online||!id||id===myId)return;if(Date.now()-(state.lastWater[id]||0)<WATER_CD)return;
@@ -728,7 +733,7 @@ function buildClan(){const el=$('#p-clan');if(!el)return;const keep=$('#clanName
     ${helpersHtml()}
     <h2>Members</h2><p class="note" hidden>Ladybugs give +20% growth and bees +25% sap, each for 3 hours, up to 5 at once. Earthworms make soil dry 25% slower for 6 hours, up to 4 at once. You can send each mate one of each whenever it’s ready. Helping earns you a little sap, up to 2 hours of your own sap flow per day.</p>`;
   for(const p of ms){const you=p.id===me;
-    h+=`<div class="member"><b>${esc(p.name)}</b><span class="lv">Lv ${p.level}</span><p>${you?'You':esc(names[p.id]||'Someone')}${giftList(p)?`, ${giftList(p)}`:''}. ${you?'':`Seen ${ago(p.seen)}.`}</p>${you?'':giftButtons(p.id)}</div>`;}
+    h+=`<div class="member"><b>${esc(p.name)}</b><span class="lv">Lv ${p.level}</span><p>${you?'You':esc(names[p.id]||'Someone')}${giftList(p)?`, ${giftList(p)}`:''}.${!you&&isActive(p)?' <span class="on">● Active now</span>':''}</p>${you?'':giftButtons(p.id)}</div>`;}
   if(ms.length<2)h+=`<p class="note">Share this page with friends so they can join ${esc(mine.name)}.</p>`;
   h+=`<h2>Clan chat</h2><div class="chat" id="chatList"></div><div class="namefield"><input id="chatIn" maxlength="300" placeholder="Message your clan" aria-label="Message" value="${esc(keepChat)}"><button class="buy go" id="chatSend">Send</button></div>`;
   h+=`<button class="linkish" id="leaveClan">Leave ${esc(mine.name)}</button>`;el.innerHTML=h;leaveArm=0;buildIcons();subscribeClan();renderTreeInfo();renderChat();updateUnread();}
@@ -894,12 +899,12 @@ function tick(){const now=Date.now();let dt=(now-state.ts)/1000;if(dt>30){catchU
   if(now-lastHelperTick>5000){lastHelperTick=now;regenStock(now);checkFinds();if(state.visitors.some(v=>v.until<=now))processIncoming();}
   refresh();if(now-lastLocal>5000){lastLocal=now;saveLocal();}
   if(now-lastRemote>60000){lastRemote=now;saveRemote();}
-  if(now-lastPubBeat>180000){lastPubBeat=now;publishGarden();}
+  if(now-lastPubBeat>120000){lastPubBeat=now;publishGarden();}
   if(now-lastCard>15000){lastCard=now;if(!$('#p-garden').hidden)renderCard();if(!$('#p-clan').hidden)refreshClanButtons();}}
 function refreshClanButtons(){document.querySelectorAll('.gifts').forEach(gd=>{const b=gd.querySelector('[data-to]');if(b)gd.outerHTML=helperButtons(b.dataset.to);});
   const hb=$('#helpersBox');if(hb)hb.outerHTML=helpersHtml();buildIcons();renderTreeInfo();}
 function frame(t){if(!document.hidden){drawHero(t);if(!$('#p-garden').hidden)drawGarden(t);if(!$('#p-clan').hidden)drawClanTree(t);}requestAnimationFrame(frame);}
-document.addEventListener('visibilitychange',()=>{if(document.hidden){saveLocal();saveRemote();}else tick();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){saveLocal();saveRemote();publishGarden();}else{publishGarden();tick();}});
 window.addEventListener('pagehide',saveLocal);
 
 /* ---------- Firebase ---------- */
