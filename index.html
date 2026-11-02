@@ -921,8 +921,10 @@ async function connect(u){disconnect();myId=u.uid;myName=(u.displayName||'').tri
   const mine=loadLocal();let remote=null;
   try{const sn=await db.doc(`saves/${myId}`).get();if(sn.exists)remote=sn.data();}catch(e){dbError(e);}
   if(myId!==u.uid)return;
-  const cands=[remote,mine,state].filter(Boolean).map(normalize);cands.sort((a,b)=>(b.asc-a.asc)||(b.seedsTotal-a.seedsTotal)||(b.ts-a.ts));
-  state=cands[0];online=true;catchUp(true);regenStock(Date.now());checkFinds();wantFocus=true;buildAll();setStatus();saveLocal();
+  /* The account's save (from the server, or this device's copy of it) always wins; the newer of the two is used.
+     The plant grown before signing in only moves to the account the very first time, when the account has no save yet. */
+  const cands=[remote,mine].filter(Boolean).map(normalize);cands.sort((a,b)=>(b.ts||0)-(a.ts||0));
+  state=cands.length?cands[0]:normalize(state);online=true;catchUp(true);regenStock(Date.now());checkFinds();wantFocus=true;buildAll();setStatus();saveLocal();
   unsubs.push(db.collection('garden').onSnapshot(sn=>{players=new Map();for(const d of sn.docs){if(d.exists)players.set(d.id,cleanPlant(d.id,d.data()||{}));}
     for(const [id,p] of players)names[id]=p.owner||names[id]||'';setStatus();renderCard();clanSoon();},e=>dbError(e)));
   unsubs.push(db.collection('clans').onSnapshot(sn=>{clans=new Map();for(const d of sn.docs){if(!d.exists)continue;const v=d.data()||{};
