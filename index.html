@@ -510,16 +510,21 @@ function trunkH(key,level){const T=genPlant(key),s=0.55+0.45*growOf(level),Gr=gr
 function stackH(P){let h=0.2;const tiers=P.tiers||[];tiers.forEach((tr,i)=>h+=trunkH(tierKey(pid(P),i),tr.level));return h+trunkH(tierKey(pid(P),tiers.length),P.level)+0.25;}
 function stackFullH(P){let h=0.2;const tiers=P.tiers||[];tiers.forEach((tr,i)=>h+=trunkH(tierKey(pid(P),i),tr.level));return h+trunkH(tierKey(pid(P),tiers.length),40)+0.35;}
 /* draws one section; cur = live data for the growing section, null for a rested one */
+/* a dry plant gets faded colors. (A canvas filter did this before, but it made every leaf very slow to draw.) */
+const dryCache=new Map();
+function dryCol(c){let v=dryCache.get(c);if(v)return v;let r,g2,b,a=1;const m=/rgba?\(([^)]+)\)/.exec(c);
+  if(m){[r,g2,b,a=1]=m[1].split(',').map(Number);}else{const n=parseInt(c.slice(1),16);r=n>>16;g2=n>>8&255;b=n&255;}
+  const gray=0.3*r+0.59*g2+0.11*b,k=0.45,mix=x=>Math.round((x*k+gray*(1-k))*0.95+12);v=`rgba(${mix(r)},${mix(g2)},${Math.round((b*k+gray*(1-k))*0.85)},${a})`;dryCache.set(c,v);return v;}
 function drawTier(g,look,key,idx,level,cur,bx,by,unit,t,inv){const T=genPlant(key),st=STEMS[look.stem]||STEMS.spring,lvl=Math.max(1,level);
   const grow=growOf(lvl),Gr=growthStage(T,lvl),s=unit*(0.55+0.45*grow),wf=Math.max(0.45,Math.pow(0.82,idx));
   const dry=cur?cur.moisture<12:false,seed=hashStr(key)%1000;
   const F=lvl>=12?Math.min(20,1+Math.floor((lvl-12)/3)+(cur?(cur.bloom||0)+(cur.asc||0):idx)):0;
-  const mut=look.mut,lc=MUT_LEAF[mut]||st.leaf;
+  const mut=look.mut,lc0=MUT_LEAF[mut]||st.leaf,lc=dry?lc0.map(dryCol):lc0,stDark=dry?dryCol(st.dark):st.dark;
   const leafScale=s*0.085*(mut==='giant'?1.5:1),flowers=[],anchors=[],wantA=!!(cur&&cur.bugsR&&cur.bugsR.length);let top=null;
-  g.save();g.translate(bx,by);g.lineCap='round';if(dry)g.filter='saturate(0.45) brightness(0.95)';
+  g.save();g.translate(bx,by);g.lineCap='round';
   (function node(n){const f=clamp(Gr-n.birth,0,1);if(f<=0)return;g.save();
     g.rotate(n.ang+(mut==='twisted'?Math.sin(n.birth*1.9+n.depth*1.3)*0.34:0)+Math.sin(t*0.0012+seed+n.birth*0.7)*(dry?0.006:(cur?0.022:0.012))*(1+n.depth));const L=n.len*s*f;
-    g.strokeStyle=n.depth===0?st.dark:st.leaf[2];g.lineWidth=Math.max(1,n.w*s*wf*(0.45+0.55*Math.min(1,Gr/9)));
+    g.strokeStyle=n.depth===0?stDark:lc[2];g.lineWidth=Math.max(1,n.w*s*wf*(0.45+0.55*Math.min(1,Gr/9)));
     g.beginPath();g.moveTo(0,0);g.lineTo(0,-L);g.stroke();
     for(const lf of n.leaves){const lF=clamp(Gr-lf.birth,0,1);if(lF<=0)continue;g.save();g.translate(0,-L*lf.at);
       g.rotate(-Math.PI/2+lf.side*(lf.ang+(dry?0.7:0))+Math.sin(t*0.002+lf.birth*3)*0.07);const ll=leafScale*lf.sz*lF;
