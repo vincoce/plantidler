@@ -176,6 +176,9 @@ h1{font-family:"Bagel Fat One","Arial Black",sans-serif;font-weight:400;font-siz
 .signline{color:var(--ink)!important;font-style:italic}
 .ascbtns{display:grid;gap:8px}
 .ascend-btn.alt{background:transparent;color:var(--seed);border:2px solid var(--seed)}
+.gtools{display:flex;gap:8px;margin-bottom:8px}.gtools input{flex:1;min-width:0;border:2px solid var(--line);background:var(--surface2);border-radius:12px;padding:7px 10px}
+.pager{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;font-size:13px;color:var(--muted)}
+.pager .buy{min-width:0;padding:6px 10px}
 </style>
 </head>
 <body>
@@ -229,8 +232,10 @@ h1{font-family:"Bagel Fat One","Arial Black",sans-serif;font-weight:400;font-siz
       <div class="panel" id="p-ascend" role="tabpanel" hidden></div>
       <div class="panel" id="p-garden" role="tabpanel" hidden>
         <p class="note" id="gardenNote">Everyone’s plants grow here. Tap one to visit it.</p>
-        <div class="seg" id="gfilter"><button data-gfilter="all" aria-pressed="true">Everyone</button><button data-gfilter="clan" aria-pressed="false">My clan</button></div>
+        <div class="seg" id="gfilter"><button data-gfilter="all" aria-pressed="true">Everyone</button><button data-gfilter="clan" aria-pressed="false">My clan</button><button data-gfilter="active" aria-pressed="false">Active now</button></div>
+        <div class="gtools"><input id="gSearch" placeholder="Find a plant or player" aria-label="Find a plant or player"><button class="buy" id="gShuffle">Shuffle</button></div>
         <canvas id="garden" aria-label="Shared garden"></canvas>
+        <div class="pager"><button class="buy" id="gPrev">‹ Previous</button><span id="gPageTxt"></span><button class="buy" id="gNext">Next ›</button></div>
         <div class="gcard" id="gcard" hidden></div>
       </div>
       <div class="panel" id="p-clan" role="tabpanel" hidden></div>
@@ -783,29 +788,53 @@ function readColors(){const cs=getComputedStyle(document.documentElement);const 
 function allPlants(){const now=Date.now();const list=[myPlant()];
   for(const p of players.values()){if(p.id===myId)continue;const m=clamp(p.moisture+p.net*(now-p.mts)/1000,0,100);
     const vis=p.vis.filter(v=>v.u>now);list.push(Object.assign({},p,{moisture:m,visNow:vis,flyN:p.fl.filter(e=>e>now).length},helperLooks(vis,p.home)));}return list;}
-function gardenList(){const me=myId||'me';let list=allPlants();if(gFilter==='clan'&&state.clan)list=list.filter(p=>p.clan===state.clan);
-  list.sort((a,b)=>a.id===me?-1:b.id===me?1:b.level-a.level);return list;}
+/* Garden: your plant first, everyone else in a random order that is different for each viewer
+   (it changes when you reload or tap Shuffle), split into pages. */
+let gPage=0,gSearch='',gShuffle=Math.random().toString(36).slice(2),gCache=null,gDrawn=false;
+const G_ROWS=3;
+function gardenList(){const me=myId||'me',q=gSearch.trim().toLowerCase();let list=allPlants();
+  if(gFilter==='clan')list=list.filter(p=>state.clan&&p.clan===state.clan);
+  if(gFilter==='active')list=list.filter(p=>isActive(p));
+  if(q)list=list.filter(p=>(p.name||'').toLowerCase().includes(q)||(names[p.id]||p.owner||'').toLowerCase().includes(q));
+  const order=id=>hashStr(gShuffle+'|'+id);list.sort((a,b)=>a.id===me?-1:b.id===me?1:order(a.id)-order(b.id));return list;}
 function clanColor(id){return CLAN_COLORS[hashStr(id)%CLAN_COLORS.length];}
-function drawGarden(t){const cv=$('#garden');const list=gardenList();const W=cv.getBoundingClientRect().width||300;
-  const cols=Math.max(2,Math.floor(W/160)),cw=W/cols,ch=Math.max(190,cw*1.35),rows=Math.ceil(list.length/cols),H=rows*ch+8;
-  if(Math.abs(parseFloat(cv.style.height||0)-H)>1)cv.style.height=H+'px';
-  const{g,w}=fit(cv);if(!gardenColors)readColors();const C=gardenColors;
-  const bg=g.createLinearGradient(0,0,0,H);bg.addColorStop(0,C.g1);bg.addColorStop(1,C.g2);g.fillStyle=bg;g.fillRect(0,0,w,H);
-  gardenCells=[];
-  list.forEach((p,i)=>{const x=(i%cols)*cw,y=Math.floor(i/cols)*ch,gy=y+ch-36;gardenCells.push({x,y,w:cw,h:ch,id:p.id});
-    g.fillStyle=C.soil;g.beginPath();g.ellipse(x+cw/2,gy+2,cw*0.42,9,0,0,7);g.fill();
-    if(selected===p.id){g.strokeStyle=C.accent;g.lineWidth=3;g.beginPath();if(g.roundRect)g.roundRect(x+5,y+5,cw-10,ch-10,14);else g.rect(x+5,y+5,cw-10,ch-10);g.stroke();}
-    p.signMaxW=cw*0.44;p.signRight=x+cw;drawPlant(g,p,x+cw/2,gy,Math.min(ch*0.66/stackH(p),cw*0.85),t);
-    g.textAlign='center';g.fillStyle=C.ink;g.font='700 13px Karla, sans-serif';g.fillText((p.name||'Plant').slice(0,16),x+cw/2,y+ch-16);
-    g.fillStyle=C.muted;g.font='500 12px Karla, sans-serif';g.fillText(`Lv ${p.level}${p.asc?'  ✦'+p.asc:''}`,x+cw/2,y+ch-2);
-    if(p.clan&&clans.has(p.clan)){const tag=clans.get(p.clan).name.slice(0,12);g.font='700 11px Karla, sans-serif';const tw=g.measureText(tag).width+12;
-      g.fillStyle=clanColor(p.clan);g.beginPath();if(g.roundRect)g.roundRect(x+cw-tw-8,y+8,tw,18,9);else g.rect(x+cw-tw-8,y+8,tw,18);g.fill();
-      g.fillStyle='#fff';g.fillText(tag,x+cw-tw/2-8,y+21);}
-    if(p.id===(myId||'me')){g.fillStyle=C.accent;g.font='700 11px Karla, sans-serif';g.textAlign='left';g.fillText('you',x+10,y+21);}
-    else if(isActive(p)){g.fillStyle='#3FB950';g.beginPath();g.arc(x+15,y+17,5,0,7);g.fill();g.strokeStyle='rgba(255,255,255,.8)';g.lineWidth=1.5;g.stroke();}});
+function gardenLayout(){const cv=$('#garden');const W=cv.getBoundingClientRect().width||300;const cols=Math.max(2,Math.floor(W/160)),cw=W/cols,ch=Math.max(190,cw*1.35);
+  const list=gardenList(),per=cols*G_ROWS,pages=Math.max(1,Math.ceil(list.length/per));gPage=clamp(gPage,0,pages-1);
+  const items=list.slice(gPage*per,(gPage+1)*per),rows=Math.max(1,Math.ceil(items.length/cols));return{W,cols,cw,ch,items,pages,total:list.length,H:rows*ch+8};}
+/* what a plant looks like, as a string: the still picture is only redrawn when this changes */
+function plantSig(p){const now=Date.now();return[p.id,p.name,p.level,p.asc,p.leaf,p.flower,p.stem,p.petal,p.pot,p.mut,p.pn,(p.tiers||[]).length,p.clan,clans.has(p.clan)?clans.get(p.clan).name:'',
+  Math.round(p.moisture/10),p.flyN||0,p.sp,p.wr,p.pu>now?Math.ceil((p.pu-now)/600000):0,signOf(p),(p.visNow||[]).map(v=>v.t+(v.r?1:0)).join(''),isActive(p)?1:0,names[p.id]||''].join('~');}
+function drawCell(g,p,c,t,C){const{x,y,w:cw,h:ch}=c,gy=y+ch-36;
+  g.fillStyle=C.soil;g.beginPath();g.ellipse(x+cw/2,gy+2,cw*0.42,9,0,0,7);g.fill();
+  p.signMaxW=cw*0.44;p.signRight=x+cw;drawPlant(g,p,x+cw/2,gy,Math.min(ch*0.66/stackH(p),cw*0.85),t);
+  g.textAlign='center';g.fillStyle=C.ink;g.font='700 13px Karla, sans-serif';g.fillText((p.name||'Plant').slice(0,16),x+cw/2,y+ch-16);
+  g.fillStyle=C.muted;g.font='500 12px Karla, sans-serif';g.fillText(`Lv ${p.level}${p.asc?'  ✦'+p.asc:''}`,x+cw/2,y+ch-2);
+  if(p.clan&&clans.has(p.clan)){const tag=clans.get(p.clan).name.slice(0,12);g.font='700 11px Karla, sans-serif';const tw=g.measureText(tag).width+12;
+    g.fillStyle=clanColor(p.clan);g.beginPath();if(g.roundRect)g.roundRect(x+cw-tw-8,y+8,tw,18,9);else g.rect(x+cw-tw-8,y+8,tw,18);g.fill();g.fillStyle='#fff';g.fillText(tag,x+cw-tw/2-8,y+21);}
+  if(p.id===(myId||'me')){g.fillStyle=C.accent;g.font='700 11px Karla, sans-serif';g.textAlign='left';g.fillText('you',x+10,y+21);}
+  else if(isActive(p)){g.fillStyle='#3FB950';g.beginPath();g.arc(x+15,y+17,5,0,7);g.fill();g.strokeStyle='rgba(255,255,255,.8)';g.lineWidth=1.5;g.stroke();}}
+function drawGarden(t){const cv=$('#garden'),L=gardenLayout();
+  if(Math.abs(parseFloat(cv.style.height||0)-L.H)>1){cv.style.height=L.H+'px';gCache=null;}
+  const{g,w}=fit(cv),dpr=cv.width/Math.max(1,w);if(!gardenColors)readColors();const C=gardenColors;
+  gardenCells=L.items.map((p,i)=>({x:(i%L.cols)*L.cw,y:Math.floor(i/L.cols)*L.ch,w:L.cw,h:L.ch,id:p.id,p}));
+  updatePager(L);
+  /* 1) a still picture of the whole page, redrawn only when something on it changes */
+  const key=[cv.width,cv.height,gPage,gFilter,gSearch,gShuffle,Math.floor(Date.now()/60000),document.documentElement.dataset.theme||'',C.g1].concat(L.items.map(plantSig)).join('|');
+  if(!gCache||gCache.key!==key){const mk=()=>{const c=document.createElement('canvas');c.width=cv.width;c.height=cv.height;const x=c.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);return[c,x];};
+    const[bgc,bgx]=mk();const gr=bgx.createLinearGradient(0,0,0,L.H);gr.addColorStop(0,C.g1);gr.addColorStop(1,C.g2);bgx.fillStyle=gr;bgx.fillRect(0,0,w,L.H);
+    const[fc,fx]=mk();fx.setTransform(1,0,0,1,0,0);fx.drawImage(bgc,0,0);fx.setTransform(dpr,0,0,dpr,0,0);for(const c of gardenCells)drawCell(fx,c.p,c,0,C);
+    gCache={key,bg:bgc,full:fc};gDrawn=false;}
+  /* 2) only the selected plant and short effects move; with nothing moving the canvas is left alone */
+  const sel=gardenCells.find(c=>c.id===selected),fxOn=(peeFx&&Date.now()-peeFx.at<1600)||gardenDrops.length>0;
+  if(!sel&&!fxOn&&gDrawn)return;
+  g.save();g.setTransform(1,0,0,1,0,0);g.drawImage(gCache.full,0,0);g.restore();gDrawn=!(sel||fxOn);
+  if(sel){const{x,y,w:cw,h:ch}=sel;g.drawImage(gCache.bg,x*dpr,y*dpr,cw*dpr,ch*dpr,x,y,cw,ch);drawCell(g,sel.p,sel,t,C);
+    g.strokeStyle=C.accent;g.lineWidth=3;g.beginPath();if(g.roundRect)g.roundRect(x+5,y+5,cw-10,ch-10,14);else g.rect(x+5,y+5,cw-10,ch-10);g.stroke();}
   if(peeFx&&Date.now()-peeFx.at<1600){const cell=gardenCells.find(c=>c.id===peeFx.id);if(cell){const k=(Date.now()-peeFx.at)/1600,sx=cell.x+cell.w*0.08,sy=cell.y+cell.h*0.62,ex=cell.x+cell.w*0.4,ey=cell.y+cell.h-38;
       g.strokeStyle=`rgba(232,205,60,${k<0.85?0.9:(1-k)*6})`;g.lineWidth=2.5;g.beginPath();g.moveTo(sx,sy);g.quadraticCurveTo((sx+ex)/2,sy-cell.h*0.12,ex,ey);g.stroke();}}
   for(let i=gardenDrops.length-1;i>=0;i--){const d=gardenDrops[i];d.y+=d.v;d.v+=0.25;g.fillStyle='rgba(120,180,240,.9)';g.beginPath();g.ellipse(d.x,d.y,2,4,0,0,7);g.fill();if(d.y>d.stop)gardenDrops.splice(i,1);}}
+function updatePager(L){const t2=$('#gPageTxt');if(!t2)return;const txt=L.total?`Page ${gPage+1} of ${L.pages} · ${L.total} plant${L.total===1?'':'s'}`:'No plants match.';
+  if(t2.textContent!==txt)t2.textContent=txt;$('#gPrev').disabled=gPage<=0;$('#gNext').disabled=gPage>=L.pages-1;}
 function cleanPlant(id,d){const s=v=>typeof v==='string'?v:'';const pick=(o,k,def)=>has(o,k)?k:def;
   return{id,name:s(d.name).slice(0,18)||'Plant',leaf:pick(LEAVES,d.leaf,'round'),flower:pick(FLOWERS,d.flower,'daisy'),
     stem:pick(STEMS,d.stem,'spring'),petal:pick(PETALS,d.petal,'blush'),pot:pick(POTS,d.pot,'terracotta'),level:Math.floor(clamp(+d.level||1,1,9999)),
@@ -1211,7 +1240,10 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
   if(b.id==='signClear'){state.sign='';state.signUntil=0;saveSoon();maybePublish();buildLook();toast('You took your sign down.');return;}
   if(b.dataset.recall)return recallGift(b.dataset.recall);
   if(b.dataset.home)return sendHome(b.dataset.home);
-  if(b.dataset.gfilter){gFilter=b.dataset.gfilter;if(gFilter==='clan'&&!state.clan)toast('Join a clan in the Clan tab first.');
+  if(b.id==='gPrev'){gPage--;return;}
+  if(b.id==='gNext'){gPage++;return;}
+  if(b.id==='gShuffle'){gShuffle=Math.random().toString(36).slice(2);gPage=0;return;}
+  if(b.dataset.gfilter){gFilter=b.dataset.gfilter;gPage=0;if(gFilter==='clan'&&!state.clan)toast('Join a clan in the Clan tab first.');
     document.querySelectorAll('[data-gfilter]').forEach(x=>x.setAttribute('aria-pressed',x===b));return;}
   if(b.dataset.tab){document.querySelectorAll('[data-tab]').forEach(t=>t.setAttribute('aria-selected',t===b));
     for(const p of ['grow','look','ascend','garden','clan'])$('#p-'+p).hidden=p!==b.dataset.tab;
@@ -1235,7 +1267,8 @@ function swatFly(f){if(passive)return toast('Tap “Play here” to play in this
 $('#jumpBtn').addEventListener('click',e=>{e.stopPropagation();focusGrowth(true);});
 window.addEventListener('resize',()=>{wantFocus=true;});
 $('#garden').addEventListener('click',e=>{const r=e.currentTarget.getBoundingClientRect();const x=e.clientX-r.left,y=e.clientY-r.top;
-  const c=gardenCells.find(c=>x>=c.x&&x<c.x+c.w&&y>=c.y&&y<c.y+c.h);selected=c?c.id:null;renderCard();});
+  const c=gardenCells.find(c=>x>=c.x&&x<c.x+c.w&&y>=c.y&&y<c.y+c.h);selected=c?(selected===c.id?null:c.id):null;gDrawn=false;renderCard();});
+document.addEventListener('input',e=>{if(e.target.id==='gSearch'){gSearch=e.target.value;gPage=0;}});
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{gardenColors=null;});
 
 /* ---------- loops ---------- */
