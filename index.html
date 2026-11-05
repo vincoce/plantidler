@@ -255,7 +255,13 @@ const STEMS={
   teal:{name:'Lagoon',cost:3,dark:'#1D5B5A',light:'#6CCDBA',edge:'#123F3E',leaf:['#3AA393','#53BCA9','#2B8577']},
   autumn:{name:'Autumn',cost:4,dark:'#6B2E1A',light:'#E89A45',edge:'#4A1E10',leaf:['#D9622B','#E8A33D','#B8432A']},
   dusk:{name:'Dusk',cost:5,dark:'#3A2559',light:'#B18BE0',edge:'#24163A',leaf:['#7F5BB5','#9A74CF','#5E418C']},
-  frost:{name:'Frost',cost:6,dark:'#3E5C7A',light:'#DDEFF8',edge:'#2B4157',leaf:['#A9CFE6','#C7E3F2','#88B4D1']}
+  frost:{name:'Frost',cost:6,dark:'#3E5C7A',light:'#DDEFF8',edge:'#2B4157',leaf:['#A9CFE6','#C7E3F2','#88B4D1']},
+  sage:{name:'Sage',cost:2,dark:'#4E5E4A',light:'#B7C4A6',edge:'#343F31',leaf:['#8FA182','#A5B596','#76886A']},
+  mint:{name:'Mint',cost:3,dark:'#2F7D6B',light:'#A8E6CF',edge:'#1F5A4C',leaf:['#6CC5A6','#8FD8BC','#4FA88A']},
+  coral:{name:'Coral',cost:4,dark:'#8A3B2A',light:'#F59B7A',edge:'#5E2618',leaf:['#EE7D5F','#F59B7A','#D4644A']},
+  cherry:{name:'Cherry',cost:5,dark:'#5A1E2C',light:'#E07A8A',edge:'#3D1420',leaf:['#C94B63','#E07A8A','#A3324A']},
+  ink:{name:'Ink',cost:6,dark:'#1B1E24',light:'#4A5260',edge:'#0E1014',leaf:['#2E343E','#3E4652','#22272F']},
+  gilded:{name:'Gilded',cost:9,dark:'#7A5A12',light:'#F1D27A',edge:'#4E3A0A',leaf:['#D9B23C','#EBCB5F','#B8922A']}
 };
 /* life = ascensions needed before the leaf can be bought; cost in sap */
 const LEAVES={round:{name:'Round',life:0,cost:0},pointed:{name:'Pointed',life:0,cost:0},
@@ -267,13 +273,22 @@ const LEAVES={round:{name:'Round',life:0,cost:0},pointed:{name:'Pointed',life:0,
   monstera:{name:'Monstera',life:5,cost:8000}};
 const HELP_CAP=2*3600; /* seconds of your own sap flow you can earn per day by helping others */
 const START_LEAVES=['round','pointed'];
-const FLOWERS={daisy:{name:'Daisy',cost:0},tulip:{name:'Tulip',cost:4},star:{name:'Starbloom',cost:5},bell:{name:'Bellflower',cost:6},rose:{name:'Rose',cost:9}};
+const FLOWERS={daisy:{name:'Daisy',cost:0},tulip:{name:'Tulip',cost:4},poppy:{name:'Poppy',cost:4},star:{name:'Starbloom',cost:5},lily:{name:'Lily',cost:5},lavender:{name:'Lavender',cost:5},
+  bell:{name:'Bellflower',cost:6},sunflower:{name:'Sunflower',cost:6},puff:{name:'Dandelion puff',cost:7},rose:{name:'Rose',cost:9},orchid:{name:'Orchid',cost:10}};
 const PETALS={blush:{name:'Blush',cost:0,c:'#F29CB3'},snow:{name:'Snow',cost:2,c:'#FBFBF4'},sun:{name:'Sunny',cost:2,c:'#F5C542'},
-  crimson:{name:'Crimson',cost:3,c:'#D93A4A'},sky:{name:'Sky',cost:3,c:'#7DB8F0'},violet:{name:'Violet',cost:4,c:'#B07CE8'}};
+  crimson:{name:'Crimson',cost:3,c:'#D93A4A'},sky:{name:'Sky',cost:3,c:'#7DB8F0'},violet:{name:'Violet',cost:4,c:'#B07CE8'},
+  peach:{name:'Peach',cost:2,c:'#F7A98B'},lemon:{name:'Lemon',cost:2,c:'#F7EA6B'},lilac:{name:'Lilac',cost:3,c:'#C9A7EB'},coral:{name:'Coral',cost:3,c:'#F26B5B'},
+  ocean:{name:'Ocean',cost:4,c:'#2E86C1'},midnight:{name:'Midnight',cost:5,c:'#3A3566'}};
 const POTS={terracotta:{name:'Clay',cost:0,c:'#B8643E',d:'#94492A'},glazed:{name:'Glazed',cost:2,c:'#2F6DA8',d:'#204F7D'},
-  stone:{name:'Stone',cost:2,c:'#8C8A84',d:'#6C6A65'},slate:{name:'Slate',cost:3,c:'#454A54',d:'#2E3239'},gold:{name:'Gold',cost:10,c:'#D4A537',d:'#A57C1C'}};
-const COSMETICS={stem:STEMS,flower:FLOWERS,petal:PETALS,pot:POTS};
-const COS_TITLES={stem:'Stem and leaf color',flower:'Flowers',petal:'Flower color',pot:'Pot'};
+  stone:{name:'Stone',cost:2,c:'#8C8A84',d:'#6C6A65'},slate:{name:'Slate',cost:3,c:'#454A54',d:'#2E3239'},gold:{name:'Gold',cost:10,c:'#D4A537',d:'#A57C1C'},
+  striped:{name:'Striped',cost:3,c:'#EFE8D6',d:'#CFC4A8',deco:'stripes'},mossy:{name:'Mossy stone',cost:4,c:'#7E8572',d:'#5E6555',deco:'moss'},
+  bucket:{name:'Bucket',cost:5,c:'#9AA3AB',d:'#77808A',deco:'bucket'},teacup:{name:'Teacup',cost:6,c:'#F6F3EC',d:'#DCD5C6',deco:'cup'},
+  boot:{name:'Old boot',cost:7,c:'#6B4A2F',d:'#4E3522',deco:'boot'},cauldron:{name:'Cauldron',cost:8,c:'#2B2D33',d:'#1A1B1F',deco:'cauldron'}};
+const DECOS={none:{name:'Nothing',cost:0},gnome:{name:'Garden gnome',cost:2},mushroom:{name:'Toadstool',cost:2},flamingo:{name:'Flamingo',cost:3},
+  fisher:{name:'Fishing gnome',cost:4},sleepy:{name:'Sleepy gnome',cost:4},lantern:{name:'Lantern',cost:4},caver:{name:'Caver gnome',cost:5},
+  party:{name:'Party gnome',cost:6},cheeky:{name:'Cheeky gnome',cost:6},crystal:{name:'Crystal rock',cost:7}};
+const COSMETICS={stem:STEMS,flower:FLOWERS,petal:PETALS,pot:POTS,deco:DECOS};
+const COS_TITLES={stem:'Stem and leaf color',flower:'Flowers',petal:'Flower color',pot:'Pot',deco:'Garden decoration'};
 const UPG={
   roots:{name:'Roots',base:8,g:1.55,max:999,eff:l=>`Sap flow ×${1+l}`},
   leaves:{name:'Foliage',base:12,g:1.6,max:999,eff:l=>`Growth ×${(1+0.3*l).toFixed(1)}`},
@@ -345,11 +360,11 @@ function cdText(ms){const m=mins(ms);return m>=60?`${Math.floor(m/60)} h${m%60?`
 /* ---------- state ---------- */
 function newState(){return{v:2,plantName:'Sprout',leaf:'round',flower:'daisy',stem:'spring',petal:'blush',pot:'terracotta',
   level:1,xp:0,sap:0,moisture:80,ts:Date.now(),up:{roots:0,leaves:0,res:0,bloom:0},seeds:0,seedsTotal:0,asc:0,perm:{fertile:0,rain:0,deep:0},
-  owned:{leaf:START_LEAVES.slice(),flower:['daisy'],stem:['spring'],petal:['blush'],pot:['terracotta']},
+  owned:{leaf:START_LEAVES.slice(),flower:['daisy'],stem:['spring'],petal:['blush'],pot:['terracotta'],deco:['none']},deco:'none',
   leavesBought:0,pn:0,pastPlants:[],peeUntil:0,sign:'',signUntil:0,flies:[],lastFly:{},spider:0,wrapped:[],bg:'meadow',ach:{},stats:{playSecs:0,days:0,lastDay:'',waters:0,helpersSent:0,wateredOthers:0,fliesGot:0,fliesCaught:0},lastWater:{},dropSeen:{},stock:Object.fromEntries(H_KEYS.map(k=>[k,[]])),stockTs:{},found:{},visitors:[],collected:[],waterCount:0,nightWaters:0,bloomSecs:0,wetSecs:0,clan:null,best:1,tiers:[],help:{day:'',sec:0},mut:null,mutDry:0,mutSeen:[],treeGiven:{}};}
 function normalize(s){const d=newState();if(!s||typeof s!=='object')return d;
   const o=Object.assign(d,s);o.up=Object.assign(newState().up,s.up||{});o.perm=Object.assign(newState().perm,s.perm||{});
-  o.owned=Object.assign(newState().owned,s.owned||{});for(const k of START_LEAVES)if(!o.owned.leaf.includes(k))o.owned.leaf.push(k);
+  o.owned=Object.assign(newState().owned,s.owned||{});if(!Array.isArray(o.owned.deco))o.owned.deco=['none'];if(!has(DECOS,o.deco))o.deco='none';for(const k of START_LEAVES)if(!o.owned.leaf.includes(k))o.owned.leaf.push(k);
   o.owned.leaf=o.owned.leaf.filter(k=>has(LEAVES,k));if(!has(LEAVES,o.leaf))o.leaf='round';
   for(const k of ['lastWater','dropSeen'])o[k]=(s[k]&&typeof s[k]==='object')?s[k]:{};
   const obj=v=>(v&&typeof v==='object'&&!Array.isArray(v))?v:{};o.stock={};o.stockTs=obj(s.stockTs);o.found=obj(s.found);
@@ -420,9 +435,9 @@ function dbError(e){const c=e&&e.code;console.warn('Firestore:',e);if(c==='permi
   else if(c==='quota_exceeded')toast('The garden is full right now. Your plant is saved on this device.');}
 const saveRemote=writer(async()=>{if(!online||saveHold||passive)return;await db.doc(`saves/${myId}`).set(stamped());});
 function summary(){const now=Date.now(),r=rates(state,now);return{name:state.plantName,leaf:state.leaf,flower:state.flower,stem:state.stem,
-  petal:state.petal,pot:state.pot,level:state.level,asc:state.asc,bloom:state.up.bloom,moisture:Math.round(state.moisture),mts:now,net:+(r.rain-r.drain).toFixed(5),
+  petal:state.petal,pot:state.pot,deco:state.deco,level:state.level,asc:state.asc,bloom:state.up.bloom,moisture:Math.round(state.moisture),mts:now,net:+(r.rain-r.drain).toFixed(5),
   seen:document.hidden?0:now,owner:myName,clan:state.clan||'',vis:state.visitors.filter(v=>v.until>now).map(v=>({t:v.type,r:!!v.rare,u:v.until})),home:Object.fromEntries(H_KEYS.map(k=>[k,state.stock[k].map(x=>x?1:0)])),pn:state.pn||0,fl:(state.flies||[]).filter(e=>e>now),pu:state.peeUntil>now?state.peeUntil:0,sp:state.spider?1:0,wr:(state.wrapped||[]).filter(e=>e>now).length,sign:signOf(state),su:state.signUntil||0,tiers:state.tiers.slice(-60),mut:state.mut||''};}
-const pubKey=()=>[state.pn,state.peeUntil,state.spider,(state.wrapped||[]).join(','),state.sign,state.signUntil,(state.flies||[]).join(','),state.plantName,state.leaf,state.flower,state.stem,state.petal,state.pot,state.level,state.asc,state.up.bloom,state.clan,JSON.stringify(state.visitors.map(v=>v.key)),JSON.stringify(state.stock),state.tiers.length,state.mut].join('|');
+const pubKey=()=>[state.pn,state.peeUntil,state.spider,(state.wrapped||[]).join(','),state.sign,state.signUntil,(state.flies||[]).join(','),state.plantName,state.leaf,state.flower,state.stem,state.petal,state.pot,state.deco,state.level,state.asc,state.up.bloom,state.clan,JSON.stringify(state.visitors.map(v=>v.key)),JSON.stringify(state.stock),state.tiers.length,state.mut].join('|');
 let lastPub='';
 const publishGarden=writer(async()=>{if(!online||passive)return;const k=pubKey();await db.doc(`garden/${myId}`).set(summary());lastPub=k;});
 function maybePublish(){if(pubKey()!==lastPub)publishGarden();}
@@ -474,6 +489,20 @@ function drawLeaf(g,kind,L,col){if(L<=0.3)return;const W=L*0.42;g.fillStyle=col;
 function shade(hex,amt){const n=parseInt(hex.slice(1),16);let r=n>>16,g=n>>8&255,b=n&255;const f=v=>clamp(Math.round(amt<0?v*(1+amt):v+(255-v)*amt),0,255);
   return`rgb(${f(r)},${f(g)},${f(b)})`;}
 function drawFlower(g,kind,r,col,isSun){const ctr=isSun?'#7A4A1E':'#F5C542';
+  if(kind==='sunflower'){g.fillStyle=col;for(let i=0;i<14;i++){const a=i*Math.PI/7;g.beginPath();g.ellipse(Math.cos(a)*r*.62,Math.sin(a)*r*.62,r*.42,r*.14,a,0,7);g.fill();}
+    g.fillStyle='#5A3416';g.beginPath();g.arc(0,0,r*.42,0,7);g.fill();g.fillStyle='rgba(255,220,150,.35)';for(let i=0;i<8;i++){const a=i*0.8;g.beginPath();g.arc(Math.cos(a)*r*.22,Math.sin(a)*r*.22,r*.05,0,7);g.fill();}return;}
+  if(kind==='lily'){g.fillStyle=col;for(let i=0;i<6;i++){const a=i*Math.PI/3-Math.PI/2;g.save();g.rotate(a);g.beginPath();g.moveTo(0,0);g.quadraticCurveTo(r*.35,r*.18,r*1.05,0);g.quadraticCurveTo(r*.35,-r*.18,0,0);g.fill();g.restore();}
+    g.strokeStyle=shade(col,-.35);g.lineWidth=Math.max(.8,r*.06);for(let i=0;i<5;i++){const a=-Math.PI/2+(i-2)*0.35;g.beginPath();g.moveTo(0,0);g.lineTo(Math.cos(a)*r*.55,Math.sin(a)*r*.55);g.stroke();}return;}
+  if(kind==='poppy'){g.fillStyle=col;for(let i=0;i<4;i++){const a=i*Math.PI/2+0.4;g.beginPath();g.arc(Math.cos(a)*r*.38,Math.sin(a)*r*.38,r*.55,0,7);g.fill();}
+    g.fillStyle=shade(col,-.15);g.beginPath();g.arc(0,0,r*.5,0,7);g.fill();g.fillStyle='#1E1A1A';g.beginPath();g.arc(0,0,r*.22,0,7);g.fill();
+    g.fillStyle='#1E1A1A';for(let i=0;i<8;i++){const a=i*Math.PI/4;g.beginPath();g.arc(Math.cos(a)*r*.32,Math.sin(a)*r*.32,r*.05,0,7);g.fill();}return;}
+  if(kind==='lavender'){for(let i=0;i<9;i++){const y=r*.4-i*r*.17,w2=r*(.24-i*.012);g.fillStyle=i%2?col:shade(col,-.15);g.beginPath();g.ellipse(-w2*.6,y,w2,w2*.7,-.4,0,7);g.ellipse(w2*.6,y-r*.05,w2,w2*.7,.4,0,7);g.fill();}return;}
+  if(kind==='puff'){g.strokeStyle='rgba(255,255,255,.85)';g.lineWidth=Math.max(.6,r*.04);for(let i=0;i<18;i++){const a=i*Math.PI/9;g.beginPath();g.moveTo(0,0);g.lineTo(Math.cos(a)*r*.8,Math.sin(a)*r*.8);g.stroke();
+      g.fillStyle=i%3?'#FFFFFF':col;g.beginPath();g.arc(Math.cos(a)*r*.85,Math.sin(a)*r*.85,r*.09,0,7);g.fill();}g.fillStyle='#B8B39C';g.beginPath();g.arc(0,0,r*.16,0,7);g.fill();return;}
+  if(kind==='orchid'){g.fillStyle=shade(col,.15);for(const a of[-Math.PI/2,-Math.PI/2-1.25,-Math.PI/2+1.25]){g.save();g.rotate(a+Math.PI/2);g.beginPath();g.ellipse(0,-r*.55,r*.22,r*.5,0,0,7);g.fill();g.restore();}
+    g.fillStyle=col;for(const s2 of[-1,1]){g.beginPath();g.ellipse(s2*r*.45,r*.05,r*.42,r*.3,s2*.3,0,7);g.fill();}
+    g.fillStyle=shade(col,-.3);g.beginPath();g.ellipse(0,r*.42,r*.26,r*.32,0,0,7);g.fill();g.fillStyle='#F5D547';g.beginPath();g.arc(0,r*.12,r*.1,0,7);g.fill();
+    g.fillStyle='rgba(120,20,60,.55)';for(const[x,y]of[[-.08,.4],[.08,.48],[0,.58]]){g.beginPath();g.arc(x*r,y*r,r*.04,0,7);g.fill();}return;}
   if(kind==='tulip'){g.fillStyle=col;g.beginPath();g.ellipse(-r*.32,0,r*.38,r*.62,-.3,0,7);g.ellipse(r*.32,0,r*.38,r*.62,.3,0,7);g.fill();
     g.fillStyle=shade(col,-.12);g.beginPath();g.ellipse(0,r*.05,r*.36,r*.68,0,0,7);g.fill();}
   else if(kind==='star'){g.fillStyle=col;g.beginPath();for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,rr=i%2?r*.45:r;g.lineTo(Math.cos(a)*rr,Math.sin(a)*rr);}g.closePath();g.fill();
@@ -557,13 +586,11 @@ function drawPlant(g,P,cx,groundY,unit,t){const inv=g.getTransform().inverse();
   tiers.forEach((tr,i)=>{const st=STEMS[tr.stem]||STEMS.spring;g.fillStyle=st.edge;g.beginPath();g.ellipse(tops[i].x,tops[i].y,unit*0.022,unit*0.014,0,0,7);g.fill();});
   const pot=POTS[P.pot]||POTS.terracotta,wet=tiers.length?0.6:clamp(P.moisture/60,0,1);
   g.fillStyle=`rgb(${Math.round(138-80*wet)},${Math.round(108-62*wet)},${Math.round(82-45*wet)})`;
-  g.beginPath();g.ellipse(cx,potTop+potH*0.1,potW*0.46,potH*0.13,0,0,7);g.fill();
-  g.fillStyle=pot.c;g.beginPath();g.moveTo(cx-potW*0.46,potTop+potH*0.14);g.lineTo(cx+potW*0.46,potTop+potH*0.14);
-  g.lineTo(cx+potW*0.36,groundY);g.lineTo(cx-potW*0.36,groundY);g.closePath();g.fill();
-  g.fillStyle=pot.d;g.fillRect(cx-potW*0.52,potTop,potW*1.04,potH*0.2);
-  g.fillStyle='rgba(255,255,255,.18)';g.fillRect(cx-potW*0.3,potTop+potH*0.3,potW*0.07,potH*0.55);
+  if(!P.champ){g.beginPath();g.ellipse(cx,potTop+potH*0.1,potW*0.46,potH*0.13,0,0,7);g.fill();}
+  if(P.champ)drawDung(g,cx,potTop,potW,potH,groundY,unit,t);else drawPot(g,pot,cx,potTop,potW,potH,groundY);
   if(P.pu&&P.pu>Date.now()){const k=Math.min(1,(P.pu-Date.now())/PEE_MS);g.fillStyle=`rgba(232,205,60,${0.55*k+0.15})`;g.beginPath();g.ellipse(cx-potW*0.62,groundY-1,potW*0.34,potW*0.07,0,0,7);g.fill();
     g.fillStyle=`rgba(255,250,200,${0.4*k})`;g.beginPath();g.ellipse(cx-potW*0.7,groundY-2,potW*0.1,potW*0.02,0,0,7);g.fill();}
+  if(P.deco&&P.deco!=='none')drawDeco(g,P.deco,cx-potW*(P.deco==='sleepy'||P.deco==='flamingo'?1.05:0.9),groundY,potH*1.45,t,skyColors()[2]);
   if(signOf(P))drawSign(g,cx+potW*0.56,groundY,signOf(P),unit,P.signMaxW||unit*0.9,!!P.hero,t,P.signRight);
   if(P.pot==='gold'){g.fillStyle='rgba(255,255,220,.55)';g.beginPath();g.arc(cx+potW*0.2,potTop+potH*0.45,potW*0.03,0,7);g.fill();}
   const wr=P.wormsR||[];for(let i=0;i<Math.min(6,wr.length);i++){const side=i%2?1:-1,x=cx+side*potW*(0.14+0.11*Math.floor(i/2)),up=0.5+0.5*Math.sin(t*0.0009+i*2.3);
@@ -613,6 +640,84 @@ function drawSpider(g,P,cx,topY,baseY,unit,t){if(!P.sp)return;const wx=cx-unit*0
   g.fillStyle='#C9A227';g.beginPath();g.arc(sx,sy+sr*0.3,sr*0.22,0,7);g.fill();
   if(P.hero&&catchFx&&Date.now()-catchFx.at<700){const f=flyPos(catchFx.i,cx,topY,baseY,unit,t),k=1-(Date.now()-catchFx.at)/700;g.strokeStyle=`rgba(255,255,255,${k})`;g.lineWidth=1.5;g.beginPath();g.moveTo(sx,sy);g.lineTo(f.x,f.y);g.stroke();}
   g.restore();}
+function potBody(g,cx,potTop,potW,potH,groundY){g.beginPath();g.moveTo(cx-potW*0.46,potTop+potH*0.14);g.lineTo(cx+potW*0.46,potTop+potH*0.14);
+  g.lineTo(cx+potW*0.36,groundY);g.lineTo(cx-potW*0.36,groundY);g.closePath();}
+function drawPot(g,pot,cx,potTop,potW,potH,groundY){const d=pot.deco;
+  if(d==='cup'){g.strokeStyle=pot.d;g.lineWidth=potW*0.07;g.beginPath();g.ellipse(cx+potW*0.46,potTop+potH*0.5,potW*0.16,potH*0.24,0,-Math.PI/2,Math.PI/2);g.stroke();
+    g.fillStyle=pot.d;g.beginPath();g.ellipse(cx,groundY,potW*0.62,potH*0.09,0,0,7);g.fill();}
+  if(d==='bucket'){g.strokeStyle='#5E666E';g.lineWidth=Math.max(1,potW*0.025);g.beginPath();g.ellipse(cx,potTop+potH*0.1,potW*0.5,potH*0.75,0,Math.PI,0);g.stroke();}
+  if(d==='cauldron'){g.fillStyle=pot.c;g.beginPath();g.ellipse(cx,potTop+potH*0.55,potW*0.52,potH*0.5,0,0,Math.PI);g.fill();
+    for(const fx of[-0.3,0.3]){g.fillRect(cx+potW*fx-potW*0.04,groundY-potH*0.1,potW*0.08,potH*0.12);}g.fillStyle=pot.d;g.fillRect(cx-potW*0.54,potTop,potW*1.08,potH*0.2);
+    g.fillStyle='rgba(140,220,120,.35)';g.beginPath();g.ellipse(cx,potTop+potH*0.06,potW*0.42,potH*0.08,0,0,7);g.fill();return;}
+  if(d==='boot'){g.fillStyle=pot.c;g.beginPath();g.ellipse(cx+potW*0.42,groundY-potH*0.18,potW*0.32,potH*0.2,0,0,7);g.fill();}
+  g.fillStyle=pot.c;potBody(g,cx,potTop,potW,potH,groundY);g.fill();
+  if(d==='stripes'){g.save();potBody(g,cx,potTop,potW,potH,groundY);g.clip();g.fillStyle='#3E7CB1';for(let i=0;i<3;i++)g.fillRect(cx-potW,potTop+potH*(0.35+i*0.2),potW*2,potH*0.08);g.restore();}
+  if(d==='bucket'){g.strokeStyle='rgba(60,66,72,.4)';g.lineWidth=1;for(let i=1;i<4;i++){const y=potTop+potH*(0.2+i*0.2);g.beginPath();g.moveTo(cx-potW*0.45,y);g.lineTo(cx+potW*0.45,y);g.stroke();}}
+  if(d==='cup'){g.fillStyle='#7FA9D6';for(const[x,y]of[[-0.2,0.45],[0.05,0.6],[0.22,0.4],[-0.05,0.35]]){g.beginPath();g.arc(cx+potW*x,potTop+potH*y,potW*0.035,0,7);g.fill();}}
+  if(d==='boot'){g.strokeStyle='#E8D9B8';g.lineWidth=Math.max(1,potW*0.02);for(let i=0;i<3;i++){const y=potTop+potH*(0.3+i*0.16);g.beginPath();g.moveTo(cx-potW*0.12,y);g.lineTo(cx+potW*0.12,y+potH*0.08);g.moveTo(cx+potW*0.12,y);g.lineTo(cx-potW*0.12,y+potH*0.08);g.stroke();}}
+  g.fillStyle=pot.d;g.fillRect(cx-potW*0.52,potTop,potW*1.04,potH*0.2);
+  if(d==='moss'){g.fillStyle='#5E8A3A';for(let i=0;i<9;i++){const x=cx-potW*0.5+i*potW*0.125;g.beginPath();g.arc(x,potTop+potH*(0.18+(i%3)*0.05),potW*0.06,0,7);g.fill();}
+    g.fillStyle='#7BA64C';for(const[x,y]of[[-0.3,0.55],[0.25,0.7],[-0.1,0.8]]){g.beginPath();g.arc(cx+potW*x,potTop+potH*y,potW*0.045,0,7);g.fill();}}
+  g.fillStyle='rgba(255,255,255,.18)';g.fillRect(cx-potW*0.3,potTop+potH*0.3,potW*0.07,potH*0.55);}
+/* the garden's top plant grows in a dung heap instead of a pot, so nobody needs to tryhard */
+function drawDung(g,cx,potTop,potW,potH,groundY,unit,t){const base=groundY,hw=potW*0.72;
+  const layers=[[0,hw,potH*0.55],[potH*0.38,hw*0.78,potH*0.5],[potH*0.74,hw*0.54,potH*0.44]];potTop=base-potH*1.05;
+  layers.forEach(([dy,w2,h2],i)=>{const y=base-dy-h2*0.5;g.fillStyle=i%2?'#6E4A26':'#5C3D1E';g.beginPath();g.ellipse(cx,y,w2,h2*0.62,0,0,7);g.fill();
+    g.fillStyle='rgba(255,230,190,.18)';g.beginPath();g.ellipse(cx-w2*0.35,y-h2*0.18,w2*0.32,h2*0.16,-0.2,0,7);g.fill();});
+  g.fillStyle='#5C3D1E';g.beginPath();g.moveTo(cx-hw*0.3,potTop+potH*0.2);g.quadraticCurveTo(cx+hw*0.1,potTop-potH*0.25,cx+hw*0.05,potTop-potH*0.05);g.quadraticCurveTo(cx+hw*0.25,potTop+potH*0.15,cx-hw*0.3,potTop+potH*0.2);g.fill();
+  g.strokeStyle='rgba(140,180,60,.55)';g.lineWidth=Math.max(1.2,unit*0.008);g.lineCap='round';
+  for(let i=0;i<3;i++){const x0=cx+(i-1)*hw*0.6,ph=t*0.002+i*2;g.beginPath();for(let k=0;k<=10;k++){const yy=potTop-k*potH*0.09-((t*0.02+i*20)%(potH*0.3));g.lineTo(x0+Math.sin(ph+k*0.9)*potW*0.05,yy);}g.stroke();}
+  for(let i=0;i<2;i++){const a=t*0.003+i*3.1;drawFly(g,cx+Math.cos(a)*hw*0.9,potTop-potH*0.2+Math.sin(a*1.3)*potH*0.3,Math.max(2.2,unit*0.012),Math.sin(a)>0?-1:1,t);}}
+/* who is top of the garden: total levels of all sections; a tie means nobody */
+let leaderId=null,leaderAt=0;
+function gardenLeader(){const now=Date.now();if(now-leaderAt<3000)return leaderId;leaderAt=now;const me=myId||'me';
+  const sc=p=>(p.tiers||[]).reduce((a,t2)=>a+(t2.level||0),0)+(p.level||0);
+  const all=[{id:me,v:sc(state)}].concat([...players.values()].filter(p=>p.id!==myId).map(p=>({id:p.id,v:sc(p)})));
+  if(all.length<2){leaderId=null;return null;}all.sort((a,b)=>b.v-a.v);leaderId=all[0].v>all[1].v?all[0].id:null;return leaderId;}
+/* ---------- garden decorations: x,y = bottom center on the ground, h = height ---------- */
+function gnomeBody(g,x,y,h,coat,hat,opts={}){const w=h*0.42;
+  g.fillStyle='#3B2A20';g.beginPath();g.ellipse(x-w*0.22,y-h*0.03,w*0.2,h*0.05,0,0,7);g.ellipse(x+w*0.22,y-h*0.03,w*0.2,h*0.05,0,0,7);g.fill();
+  g.fillStyle=coat;g.beginPath();g.moveTo(x-w*0.45,y-h*0.06);g.quadraticCurveTo(x-w*0.5,y-h*0.5,x,y-h*0.56);g.quadraticCurveTo(x+w*0.5,y-h*0.5,x+w*0.45,y-h*0.06);g.closePath();g.fill();
+  g.fillStyle='#3B2A20';g.fillRect(x-w*0.45,y-h*0.2,w*0.9,h*0.04);g.fillStyle='#D9B23C';g.fillRect(x-w*0.07,y-h*0.205,w*0.14,h*0.05);
+  g.fillStyle='#F7F3EA';g.beginPath();g.moveTo(x-w*0.3,y-h*0.55);g.quadraticCurveTo(x-w*0.35,y-h*0.3,x,y-h*0.22);g.quadraticCurveTo(x+w*0.35,y-h*0.3,x+w*0.3,y-h*0.55);g.closePath();g.fill();
+  g.fillStyle='#F2C6A0';g.beginPath();g.arc(x,y-h*0.6,w*0.24,0,7);g.fill();g.fillStyle=opts.redCheeks?'#E0606A':'#E79A84';g.beginPath();g.arc(x,y-h*0.57,w*0.09,0,7);g.fill();
+  if(opts.redCheeks){g.fillStyle='rgba(224,96,106,.6)';g.beginPath();g.arc(x-w*0.15,y-h*0.58,w*0.06,0,7);g.arc(x+w*0.15,y-h*0.58,w*0.06,0,7);g.fill();}
+  g.fillStyle='#2A1E18';const eye=opts.sleep?0:1;if(eye){g.beginPath();g.arc(x-w*0.09,y-h*0.64,w*0.03,0,7);g.arc(x+w*0.09,y-h*0.64,w*0.03,0,7);g.fill();}
+  if(hat==='helmet'){g.fillStyle='#F4F1E6';g.beginPath();g.ellipse(x,y-h*0.7,w*0.33,h*0.12,0,Math.PI,0);g.fill();g.fillRect(x-w*0.36,y-h*0.71,w*0.72,h*0.03);
+    g.fillStyle='#F5D547';g.beginPath();g.arc(x+w*0.05,y-h*0.76,w*0.08,0,7);g.fill();}
+  else{g.fillStyle=hat;g.beginPath();g.moveTo(x-w*0.3,y-h*0.66);g.quadraticCurveTo(x-w*0.05,y-h*1.05,x+w*0.32,y-h*1.02);g.quadraticCurveTo(x+w*0.05,y-h*0.92,x+w*0.3,y-h*0.66);g.closePath();g.fill();}}
+function drawDeco(g,k,x,y,h,t,night){g.save();g.lineCap='round';const w=h*0.42;
+  if(k==='gnome')gnomeBody(g,x,y,h,'#3E6FB0','#C9302C');
+  else if(k==='party'){gnomeBody(g,x,y,h,'#5E8A3A','#7F5BB5',{redCheeks:true});const bx=x+w*0.42,by=y-h*0.62+Math.sin(t*0.004)*h*0.02;
+    g.fillStyle='#3A1E0E';g.fillRect(bx-w*0.07,by-h*0.02,w*0.14,h*0.2);g.fillRect(bx-w*0.03,by-h*0.08,w*0.06,h*0.07);g.fillStyle='#EFE3C6';g.fillRect(bx-w*0.07,by+h*0.06,w*0.14,h*0.05);
+    g.fillStyle='#F2C6A0';g.beginPath();g.arc(bx,by+h*0.16,w*0.08,0,7);g.fill();}
+  else if(k==='caver'){gnomeBody(g,x,y,h,'#E07A2E','helmet');g.strokeStyle='#8A6A3E';g.lineWidth=h*0.025;for(let i=0;i<3;i++){g.beginPath();g.ellipse(x-w*0.5,y-h*0.25,w*0.18,h*0.1-i*h*0.015,0,0,7);g.stroke();}
+    const fl=night?0.35+0.1*Math.sin(t*0.01):0.12;const lx=x+w*0.05,ly=y-h*0.76;const gr=g.createLinearGradient(lx,ly,lx+h*0.9,ly+h*0.1);gr.addColorStop(0,`rgba(255,240,170,${fl})`);gr.addColorStop(1,'rgba(255,240,170,0)');
+    g.fillStyle=gr;g.beginPath();g.moveTo(lx,ly);g.lineTo(lx+h*0.9,ly-h*0.18);g.lineTo(lx+h*0.9,ly+h*0.3);g.closePath();g.fill();}
+  else if(k==='fisher'){gnomeBody(g,x,y,h,'#2E86C1','#D98A1E');g.strokeStyle='#6B4A2F';g.lineWidth=h*0.02;g.beginPath();g.moveTo(x-w*0.3,y-h*0.4);g.lineTo(x-h*0.55,y-h*0.95);g.stroke();
+    const bob=Math.sin(t*0.003)*h*0.03;g.strokeStyle='rgba(255,255,255,.7)';g.lineWidth=1;g.beginPath();g.moveTo(x-h*0.55,y-h*0.95);g.lineTo(x-h*0.6,y-h*0.08+bob);g.stroke();
+    g.fillStyle='#D93A4A';g.beginPath();g.arc(x-h*0.6,y-h*0.08+bob,h*0.03,0,7);g.fill();g.fillStyle='rgba(95,166,201,.6)';g.beginPath();g.ellipse(x-h*0.6,y-h*0.02,h*0.16,h*0.03,0,0,7);g.fill();}
+  else if(k==='sleepy'){g.save();g.translate(x,y);g.rotate(-Math.PI/2);gnomeBody(g,h*0.12,h*0.05,h*0.85,'#8E6CCB','#3E8E4E',{sleep:true});g.restore();
+    g.fillStyle='rgba(255,255,255,.85)';g.font=`700 ${Math.round(h*0.14)}px Karla,sans-serif`;g.textAlign='center';const z=(t*0.0006)%1;g.globalAlpha=1-z;g.fillText('z',x-h*0.35,y-h*0.3-z*h*0.3);g.globalAlpha=Math.max(0,1-((z+0.5)%1));g.fillText('Z',x-h*0.22,y-h*0.42-((z+0.5)%1)*h*0.3);g.globalAlpha=1;}
+  else if(k==='cheeky'){/* bending over, facing away, trousers down a little */
+    g.fillStyle='#3B2A20';g.beginPath();g.ellipse(x-w*0.25,y-h*0.03,w*0.2,h*0.05,0,0,7);g.ellipse(x+w*0.25,y-h*0.03,w*0.2,h*0.05,0,0,7);g.fill();
+    g.fillStyle='#3E6FB0';g.fillRect(x-w*0.4,y-h*0.2,w*0.8,h*0.16);g.fillStyle='#F2C6A0';g.beginPath();g.arc(x-w*0.2,y-h*0.32,w*0.24,0,7);g.arc(x+w*0.2,y-h*0.32,w*0.24,0,7);g.fill();
+    g.strokeStyle='rgba(160,90,70,.6)';g.lineWidth=1.2;g.beginPath();g.moveTo(x,y-h*0.5);g.lineTo(x,y-h*0.2);g.stroke();
+    g.fillStyle='#C9302C';g.beginPath();g.moveTo(x-w*0.4,y-h*0.42);g.quadraticCurveTo(x-w*0.6,y-h*0.6,x-w*0.95,y-h*0.38);g.quadraticCurveTo(x-w*0.6,y-h*0.36,x-w*0.35,y-h*0.32);g.closePath();g.fill();
+    g.fillStyle='#F7F3EA';g.beginPath();g.ellipse(x-w*0.55,y-h*0.22,w*0.12,h*0.08,0.5,0,7);g.fill();}
+  else if(k==='mushroom'){g.fillStyle='#F4EEDC';g.fillRect(x-w*0.14,y-h*0.42,w*0.28,h*0.42);g.fillStyle='#D33A2C';g.beginPath();g.ellipse(x,y-h*0.42,w*0.6,h*0.22,0,Math.PI,0);g.fill();
+    g.fillStyle='#FFF';for(const[a,b2,r]of[[-0.3,0.5,0.06],[0.1,0.58,0.07],[0.35,0.48,0.05],[-0.05,0.47,0.04]]){g.beginPath();g.arc(x+w*a,y-h*b2,w*r*1.4,0,7);g.fill();}}
+  else if(k==='flamingo'){g.strokeStyle='#C76E86';g.lineWidth=Math.max(1,h*0.018);g.beginPath();g.moveTo(x,y);g.lineTo(x,y-h*0.45);g.moveTo(x+w*0.1,y);g.lineTo(x+w*0.05,y-h*0.25);g.lineTo(x,y-h*0.45);g.stroke();
+    g.fillStyle='#F48FB1';g.beginPath();g.ellipse(x+w*0.05,y-h*0.52,w*0.45,h*0.12,-0.2,0,7);g.fill();g.strokeStyle='#F48FB1';g.lineWidth=h*0.05;
+    g.beginPath();g.moveTo(x+w*0.35,y-h*0.55);g.quadraticCurveTo(x+w*0.6,y-h*0.8,x+w*0.3,y-h*0.9);g.stroke();g.fillStyle='#2A1E18';g.beginPath();g.moveTo(x+w*0.25,y-h*0.92);g.lineTo(x+w*0.08,y-h*0.86);g.lineTo(x+w*0.22,y-h*0.88);g.fill();}
+  else if(k==='lantern'){g.fillStyle='#3A3F46';g.fillRect(x-w*0.04,y-h*0.9,w*0.08,h*0.9);g.fillRect(x-w*0.04,y-h*0.9,w*0.35,h*0.03);
+    const lx=x+w*0.3,ly=y-h*0.75;if(night){const gr=g.createRadialGradient(lx,ly,0,lx,ly,h*0.5);gr.addColorStop(0,'rgba(255,210,120,.55)');gr.addColorStop(1,'rgba(255,210,120,0)');g.fillStyle=gr;g.beginPath();g.arc(lx,ly,h*0.5,0,7);g.fill();}
+    g.fillStyle='#2B2D33';g.fillRect(lx-w*0.15,ly-h*0.09,w*0.3,h*0.2);g.fillStyle=night?'#FFD27A':'#F3E7C2';g.fillRect(lx-w*0.1,ly-h*0.06,w*0.2,h*0.14);}
+  else if(k==='crystal'){g.fillStyle='#7C7A72';g.beginPath();g.ellipse(x,y-h*0.08,w*0.6,h*0.12,0,Math.PI,0);g.fill();
+    for(const[dx,hh,a,c]of[[-0.15,0.55,-0.25,'#9B6CD6'],[0.12,0.7,0.12,'#B58BEA'],[0.32,0.4,0.4,'#8457C2']]){g.save();g.translate(x+w*dx,y-h*0.12);g.rotate(a);g.fillStyle=c;g.beginPath();g.moveTo(-w*0.1,0);g.lineTo(-w*0.1,-h*hh*0.8);g.lineTo(0,-h*hh);g.lineTo(w*0.1,-h*hh*0.8);g.lineTo(w*0.1,0);g.closePath();g.fill();
+      g.fillStyle='rgba(255,255,255,.35)';g.fillRect(-w*0.06,-h*hh*0.75,w*0.04,h*hh*0.6);g.restore();}
+    if(night){g.fillStyle='rgba(180,140,255,.18)';g.beginPath();g.arc(x,y-h*0.35,h*0.45,0,7);g.fill();}}
+  g.restore();}
 function drawSkyHelpers(g,P,cx,topY,baseY,unit,t){drawSpider(g,P,cx,topY,baseY,unit,t);
   const fn=Math.min(FLY_MAX,P.flyN||0);if(P.hero)heroFlyPos=[];for(let i=0;i<fn;i++){const f=flyPos(i,cx,topY,baseY,unit,t),r=Math.max(3,unit*0.019);drawFly(g,f.x,f.y,r,f.dir,t);if(P.hero)heroFlyPos.push({i,x:f.x,y:f.y,r:Math.max(16,r*4)});}
   for(let i=splats.length-1;i>=0;i--){const s2=splats[i],age=Date.now()-s2.at;if(!P.hero)break;if(age>900){splats.splice(i,1);continue;}g.globalAlpha=1-age/900;g.fillStyle='#3A2A20';
@@ -632,7 +737,7 @@ function fit(cv){const r=cv.getBoundingClientRect();const dpr=Math.min(2,window.
 function skyColors(){const h=new Date().getHours()+new Date().getMinutes()/60;
   if(h>=7&&h<18)return['#6FB9EC','#CDEAF8',false,'#2C5FA0'];if((h>=18&&h<20.5)||(h>=5&&h<7))return['#E58F63','#F8D7B0',false,'#5A3F7A'];return['#14213D','#36466E',true,'#070B18'];}
 const drops=[];let shake=0,wantFocus=true;
-function myPlant(){return{id:myId||'me',hero:true,pn:state.pn||0,pu:state.peeUntil,sp:state.spider?1:0,wr:(state.wrapped||[]).filter(e=>e>Date.now()).length,sign:signOf(state),su:state.signUntil,flyN:(state.flies||[]).filter(e=>e>Date.now()).length,mut:state.mut,tiers:state.tiers,leaf:state.leaf,flower:state.flower,stem:state.stem,petal:state.petal,pot:state.pot,
+function myPlant(){return{id:myId||'me',hero:true,champ:gardenLeader()===(myId||'me'),pn:state.pn||0,pu:state.peeUntil,sp:state.spider?1:0,wr:(state.wrapped||[]).filter(e=>e>Date.now()).length,sign:signOf(state),su:state.signUntil,flyN:(state.flies||[]).filter(e=>e>Date.now()).length,mut:state.mut,tiers:state.tiers,leaf:state.leaf,flower:state.flower,stem:state.stem,petal:state.petal,pot:state.pot,deco:state.deco,
   level:state.level,asc:state.asc,bloom:state.up.bloom,moisture:state.moisture,...helperLooks(state.visitors.filter(v=>v.until>Date.now()).map(v=>({t:v.type,r:!!v.rare})),Object.fromEntries(H_KEYS.map(k=>[k,state.stock[k]])),true),clan:state.clan||'',name:state.plantName};}
 /* turn visitors + helpers living at home into what drawPlant shows */
 function helperLooks(vis,home,asBool){const by=k=>vis.filter(v=>v.t===k).map(v=>!!v.r).concat(((home||{})[k]||[]).map(x=>!!x));
@@ -792,7 +897,7 @@ function readColors(){const cs=getComputedStyle(document.documentElement);const 
   gardenColors={ink:v('--ink'),muted:v('--muted'),g1:v('--grass1'),g2:v('--grass2'),soil:v('--soil'),accent:v('--accent')};}
 function allPlants(){const now=Date.now();const list=[myPlant()];
   for(const p of players.values()){if(p.id===myId)continue;const m=clamp(p.moisture+p.net*(now-p.mts)/1000,0,100);
-    const vis=p.vis.filter(v=>v.u>now);list.push(Object.assign({},p,{moisture:m,visNow:vis,flyN:p.fl.filter(e=>e>now).length},helperLooks(vis,p.home)));}return list;}
+    const vis=p.vis.filter(v=>v.u>now);list.push(Object.assign({},p,{champ:p.id===gardenLeader(),moisture:m,visNow:vis,flyN:p.fl.filter(e=>e>now).length},helperLooks(vis,p.home)));}return list;}
 /* Garden: your plant first, everyone else in a random order that is different for each viewer
    (it changes when you reload or tap Shuffle), split into pages. */
 let gPage=0,gSearch='',gShuffle=Math.random().toString(36).slice(2),gCache=null,gDrawn=false;
@@ -807,7 +912,7 @@ function gardenLayout(){const cv=$('#garden');const W=cv.getBoundingClientRect()
   const list=gardenList(),per=cols*G_ROWS,pages=Math.max(1,Math.ceil(list.length/per));gPage=clamp(gPage,0,pages-1);
   const items=list.slice(gPage*per,(gPage+1)*per),rows=Math.max(1,Math.ceil(items.length/cols));return{W,cols,cw,ch,items,pages,total:list.length,H:rows*ch+8};}
 /* what a plant looks like, as a string: the still picture is only redrawn when this changes */
-function plantSig(p){const now=Date.now();return[p.id,p.name,p.level,p.asc,p.leaf,p.flower,p.stem,p.petal,p.pot,p.mut,p.pn,(p.tiers||[]).length,p.clan,clans.has(p.clan)?clans.get(p.clan).name:'',
+function plantSig(p){const now=Date.now();return[p.deco,p.champ?1:0,p.id,p.name,p.level,p.asc,p.leaf,p.flower,p.stem,p.petal,p.pot,p.mut,p.pn,(p.tiers||[]).length,p.clan,clans.has(p.clan)?clans.get(p.clan).name:'',
   Math.round(p.moisture/10),p.flyN||0,p.sp,p.wr,p.pu>now?Math.ceil((p.pu-now)/600000):0,signOf(p),(p.visNow||[]).map(v=>v.t+(v.r?1:0)).join(''),isActive(p)?1:0,names[p.id]||''].join('~');}
 function drawCell(g,p,c,t,C){const{x,y,w:cw,h:ch}=c,gy=y+ch-36;
   g.fillStyle=C.soil;g.beginPath();g.ellipse(x+cw/2,gy+2,cw*0.42,9,0,0,7);g.fill();
@@ -842,7 +947,7 @@ function updatePager(L){const t2=$('#gPageTxt');if(!t2)return;const txt=L.total?
   if(t2.textContent!==txt)t2.textContent=txt;$('#gPrev').disabled=gPage<=0;$('#gNext').disabled=gPage>=L.pages-1;}
 function cleanPlant(id,d){const s=v=>typeof v==='string'?v:'';const pick=(o,k,def)=>has(o,k)?k:def;
   return{id,name:s(d.name).slice(0,18)||'Plant',leaf:pick(LEAVES,d.leaf,'round'),flower:pick(FLOWERS,d.flower,'daisy'),
-    stem:pick(STEMS,d.stem,'spring'),petal:pick(PETALS,d.petal,'blush'),pot:pick(POTS,d.pot,'terracotta'),level:Math.floor(clamp(+d.level||1,1,9999)),
+    stem:pick(STEMS,d.stem,'spring'),petal:pick(PETALS,d.petal,'blush'),pot:pick(POTS,d.pot,'terracotta'),deco:pick(DECOS,d.deco,'none'),level:Math.floor(clamp(+d.level||1,1,9999)),
     asc:Math.floor(clamp(+d.asc||0,0,999)),bloom:Math.floor(clamp(+d.bloom||0,0,999)),moisture:clamp(+d.moisture||0,0,100),mts:+d.mts||Date.now(),
     net:clamp(+d.net||-0.05,-1,1),seen:+d.seen||0,owner:s(d.owner).slice(0,30),clan:s(d.clan).slice(0,40),pn:isFinite(d.pn)?Math.max(0,d.pn|0):0,fl:numArr(d.fl,FLY_MAX),pu:isFinite(d.pu)?+d.pu:0,sp:d.sp?1:0,wr:clamp(+d.wr||0,0,3)|0,sign:cleanSign(d.sign),su:isFinite(d.su)?+d.su:0,vis:Array.isArray(d.vis)?d.vis.filter(v=>v&&has(HELPERS,v.t)&&isFinite(v.u)).slice(0,8).map(v=>({t:v.t,r:!!v.r,u:+v.u})):[],home:Object.fromEntries(H_KEYS.map(k=>[k,(Array.isArray((d.home||{})[k])?d.home[k]:[]).slice(0,STOCK_CAP).map(Boolean)])),tiers:Array.isArray(d.tiers)?d.tiers.slice(-60).map(cleanTier):[],mut:has(MUTS,d.mut)?d.mut:null};}
 const numArr=(a,n)=>Array.isArray(a)?a.filter(x=>isFinite(x)).slice(0,n).map(Number):[];
@@ -865,7 +970,7 @@ function renderCard(){const card=$('#gcard');if(!selected){card.hidden=true;retu
   if(selected===(myId||'me')){card.innerHTML=`<div class="txt"><b>${esc(state.plantName)}</b><p>This is your plant. Friends can water it, and clan mates can send it helpers once they’ve found some.</p></div>`;return;}
   const p=allPlants().find(x=>x.id===selected);if(!p){card.hidden=true;return;}
   const owner=names[p.id]||'Someone',cd=(state.lastWater[p.id]||0)+WATER_CD-Date.now(),cl=p.clan&&clans.get(p.clan);const mate=state.clan&&p.clan===state.clan;
-  card.innerHTML=`<div class="txt"><b>${esc(p.name)}</b>${signOf(p)?`<p class="signline">“${esc(signOf(p))}”</p>`:''}<p>Grown by ${esc(owner)}${cl?` in ${esc(cl.name)}`:''}. Level ${p.level}, ${esc(LEAVES[p.leaf].name.toLowerCase())} leaves${p.asc?`, ascended ${p.asc}×`:''}. Soil ${Math.round(p.moisture)}%${giftList(p)?`, ${giftList(p)}`:''}.${isActive(p)?' <span class="on">● Active now</span>':''}</p>${mate?giftButtons(p.id):''}${flyButton(p.id)}</div>
+  card.innerHTML=`<div class="txt"><b>${esc(p.name)}</b>${p.champ?'<p class="signline">Top of the garden, so it grows in a dung heap.</p>':''}${signOf(p)?`<p class="signline">“${esc(signOf(p))}”</p>`:''}<p>Grown by ${esc(owner)}${cl?` in ${esc(cl.name)}`:''}. Level ${p.level}, ${esc(LEAVES[p.leaf].name.toLowerCase())} leaves${p.asc?`, ascended ${p.asc}×`:''}. Soil ${Math.round(p.moisture)}%${giftList(p)?`, ${giftList(p)}`:''}.${isActive(p)?' <span class="on">● Active now</span>':''}</p>${mate?giftButtons(p.id):''}${flyButton(p.id)}</div>
     <div style="display:grid;gap:6px"><button class="buy ${cd<=0?'go':''}" id="waterOther" ${cd>0||!online?'disabled':''}>${cd>0?`Water in ${cdText(cd)}`:'Water it'}</button>${cd>0?'':`<button class="buy" id="peeOther" ${online?'':'disabled'}>Pee on it</button>`}</div>`;buildIcons();}
 function flyButton(id){const cd=(state.lastFly[id]||0)+FLY_CD-Date.now();return`<button class="linkish flybtn" data-fly="${esc(id)}" ${cd>0||!online?'disabled':''}>${cd>0?`Next fly in ${mins(cd)} min`:'Send a fly (−1 sap, just for fun)'}</button>`;}
 async function sendFly(to){if(!online||!to||to===myId||passive)return;const p=players.get(to);if(!p)return;if(Date.now()-(state.lastFly[to]||0)<FLY_CD)return;
@@ -1156,9 +1261,9 @@ function buildLook(){let h=`<h2>Name</h2><div class="namefield"><input id="nameI
     const L=LEAVES[k],gated=!own&&state.asc<L.life;
     h+=`<button data-leaf="${k}" aria-pressed="${state.leaf===k}" class="${own?'':'locked'}" ${gated?'style="opacity:.5"':''}><canvas data-icon="leaf:${k}" width="88" height="88"></canvas>${L.name}${own?'':gated?`<small style="color:var(--muted)">After ${L.life} ascension${L.life>1?'s':''}</small>`:`<small>${fmt(leafCost(k))} sap</small>`}</button>`;}
   h+=`</div>`;
-  for(const cat of ['stem','flower','petal','pot']){const set=COSMETICS[cat];h+=`<h2>${COS_TITLES[cat]}</h2><div class="chips">`;
+  for(const cat of ['stem','flower','petal','pot','deco']){const set=COSMETICS[cat];h+=`<h2>${COS_TITLES[cat]}</h2><div class="chips">`;
     for(const k in set){const it=set[k],own=state.owned[cat].includes(k);
-      const sw=cat==='stem'?`<span class="sw" style="background:linear-gradient(${it.light},${it.dark})"></span>`:cat==='flower'?`<canvas data-icon="flower:${k}" width="56" height="56"></canvas>`:`<span class="sw" style="background:${it.c}"></span>`;
+      const sw=cat==='stem'?`<span class="sw" style="background:linear-gradient(${it.light},${it.dark})"></span>`:cat==='flower'?`<canvas data-icon="flower:${k}" width="56" height="56"></canvas>`:cat==='deco'?`<canvas data-icon="deco:${k}" width="56" height="56"></canvas>`:`<span class="sw" style="background:${it.c}"></span>`;
       h+=`<button class="chip ${own?'':'locked'}" data-cos="${cat}" data-key="${k}" aria-pressed="${state[cat]===k}">${sw}${it.name}${own?'':` <span class="cost">${it.cost} seeds</span>`}</button>`;}
     h+=`</div>`;}
   h+=`<p class="note" style="margin-top:12px">Colors, flowers and pots are bought with seeds from ascending.</p>`;
@@ -1181,6 +1286,7 @@ function buildIcons(){document.querySelectorAll('canvas[data-icon]').forEach(c=>
       g.fillStyle='#E9F1F8';g.beginPath();g.ellipse(0,-2,20,9,0,0,7);g.ellipse(-10,0,11,8,0,0,7);g.ellipse(9,-6,12,10,0,0,7);g.fill();}
     else{g.fillStyle='#6B4A2F';g.beginPath();g.ellipse(0,8,22,12,0,Math.PI,0);g.fill();g.fillStyle='#4E3522';for(const[x,y]of[[-8,2],[4,-1],[10,4],[-2,6]]){g.beginPath();g.arc(x,y,3,0,7);g.fill();}
       g.fillStyle='#6DBB55';g.beginPath();g.ellipse(-4,-6,7,3,-0.6,0,7);g.ellipse(5,-7,7,3,0.6,0,7);g.fill();}}
+  else if(cat==='deco'){g.translate(0,24);if(k!=='none')drawDeco(g,k,0,0,44,0,false);else{g.strokeStyle='#999';g.lineWidth=2;g.beginPath();g.arc(0,-20,12,0,7);g.moveTo(-8,-12);g.lineTo(8,-28);g.stroke();}}
   else drawFlower(g,k,18,PETALS[state.petal].c,state.petal==='sun');g.restore();});}
 function buildAscendButtons(){const a=$('#ascBtn'),b=$('#ascSeed'),gain=seedsFor(state.level);if(a)a.textContent=`Grow on top (+${gain} seeds)`;if(b)b.textContent=`Start from a seed (+${gain} seeds)`;}
 function buildAscend(){const can=state.level>=ascAt(),gain=seedsFor(state.level);
@@ -1210,7 +1316,7 @@ function ascend(mode){if(state.level<ascAt())return;const btn=$(mode==='seed'?'#
 function buildAll(){buildGrow();buildLook();buildAscend();buildClan();refresh();}
 function refresh(){const now=Date.now(),r=rates(state,now),n=need(state.level),mp=myPlant(),gl=giftList({id:myId||'me'});
   $('#pname').textContent=state.plantName;
-  $('#stageName').textContent=`${stageName(state.level)}${state.mut?`, ${MUTS[state.mut].name.toLowerCase()}`:''}${gl?`, ${gl}`:''}${state.spider?', a spider in its web':''}${(state.flies||[]).filter(e=>e>now).length?`, ${state.flies.filter(e=>e>now).length} fl${state.flies.filter(e=>e>now).length>1?'ies':'y'} buzzing (tap to swat)`:''}${sunFactor(now)<1?', resting for the night':''}`;
+  $('#stageName').textContent=`${stageName(state.level)}${state.mut?`, ${MUTS[state.mut].name.toLowerCase()}`:''}${gl?`, ${gl}`:''}${gardenLeader()===(myId||'me')?', top of the garden (enjoy the dung heap)':''}${state.spider?', a spider in its web':''}${(state.flies||[]).filter(e=>e>now).length?`, ${state.flies.filter(e=>e>now).length} fl${state.flies.filter(e=>e>now).length>1?'ies':'y'} buzzing (tap to swat)`:''}${sunFactor(now)<1?', resting for the night':''}`;
   $('#sLevel').textContent=state.level;$('#sXpRate').textContent=`${fmt(r.xp*3600)} growth/h`;
   $('#sSap').textContent=fmt(state.sap);$('#sSapRate').textContent=`+${fmt(r.sap*3600)}/h`;
   $('#sSeeds').textContent=state.seeds;$('#sAsc').textContent=state.asc?`Ascended ${state.asc}×`:'Not ascended';
@@ -1280,7 +1386,8 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{garden
 let lastHelperTick=Date.now(),lastRemote=Date.now(),lastPubBeat=Date.now(),lastLocal=Date.now(),lastCard=0;
 function tick(){const now=Date.now();let dt=(now-state.ts)/1000;if(dt>30){catchUp(true);}else if(dt>0){const ups=step(state,dt,now);state.ts=now;
     if(ups){toast(`${state.plantName} reached level ${state.level}.`);buildGrow();buildAscend();maybePublish();}}
-  if(now-lastHelperTick>5000){spiderHunt((now-lastHelperTick)/1000);trackPlay((now-lastHelperTick)/1000);lastHelperTick=now;checkAch();regenStock(now);checkFinds();if(state.visitors.some(v=>v.until<=now))processIncoming();}
+  if(now-lastHelperTick>5000){const champ=online&&gardenLeader()===(myId||'me');if(champ&&!state.champNote){state.champNote=true;toast('Your plant is the tallest in the garden, so from now on it grows in a dung heap. Congratulations?');saveSoon();}else if(!champ&&state.champNote&&online){state.champNote=false;saveSoon();}
+    spiderHunt((now-lastHelperTick)/1000);trackPlay((now-lastHelperTick)/1000);lastHelperTick=now;checkAch();regenStock(now);checkFinds();if(state.visitors.some(v=>v.until<=now))processIncoming();}
   refresh();if(now-lastLocal>5000){lastLocal=now;saveLocal();}
   if(now-lastRemote>60000){lastRemote=now;saveRemote();}
   if(now-lastPubBeat>120000){lastPubBeat=now;publishGarden();}
