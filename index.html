@@ -536,8 +536,8 @@ function growthStage(T,l){return Math.min(T.maxBirth+0.5,0.6+(Math.max(1,l)-1)*0
 /* height of a section's trunk at unit=1 */
 function trunkH(key,level){const T=genPlant(key),s=0.55+0.45*growOf(level),Gr=growthStage(T,level);let a=0,y=0,n=T.root;
   while(n){const f=clamp(Gr-n.birth,0,1);if(f<=0)break;a+=n.ang;y+=Math.cos(a)*n.len*s*f;n=n.kids[0]&&n.kids[0].depth===n.depth?n.kids[0]:null;}return y;}
-function stackH(P){let h=0.2;const tiers=P.tiers||[];tiers.forEach((tr,i)=>h+=trunkH(tierKey(pid(P),i),tr.level));return h+trunkH(tierKey(pid(P),tiers.length),P.level)+0.25;}
-function stackFullH(P){let h=0.2;const tiers=P.tiers||[];tiers.forEach((tr,i)=>h+=trunkH(tierKey(pid(P),i),tr.level));return h+trunkH(tierKey(pid(P),tiers.length),40)+0.35;}
+function stackH(P){let h=0.2;const tiers=P.tiers||[];tiers.forEach((tr,i)=>h+=trunkH(tierKey(pid(P),i+(P.tOff||0)),tr.level));return h+trunkH(tierKey(pid(P),tiers.length+(P.tOff||0)),P.level)+0.25;}
+function stackFullH(P){let h=0.2;const tiers=P.tiers||[];tiers.forEach((tr,i)=>h+=trunkH(tierKey(pid(P),i+(P.tOff||0)),tr.level));return h+trunkH(tierKey(pid(P),tiers.length+(P.tOff||0)),40)+0.35;}
 /* draws one section; cur = live data for the growing section, null for a rested one */
 /* a dry plant gets faded colors. (A canvas filter did this before, but it made every leaf very slow to draw.) */
 const dryCache=new Map();
@@ -580,8 +580,8 @@ function drawTier(g,look,key,idx,level,cur,bx,by,unit,t,inv){const T=genPlant(ke
 function drawPlant(g,P,cx,groundY,unit,t){const inv=g.getTransform().inverse();
   const potW=unit*0.3,potH=potW*0.6,potTop=groundY-potH,base=potTop+potH*0.18;const tiers=P.tiers||[];
   let p={x:cx,y:base};const tops=[];
-  tiers.forEach((tr,i)=>{p=drawTier(g,tr,tierKey(pid(P),i),i,tr.level,null,p.x,p.y,unit,t,inv);tops.push(p);});
-  const start=p;const top=drawTier(g,P,tierKey(pid(P),tiers.length),tiers.length,P.level,P,p.x,p.y,unit,t,inv);
+  tiers.forEach((tr,i)=>{p=drawTier(g,tr,tierKey(pid(P),i+(P.tOff||0)),i+(P.tOff||0),tr.level,null,p.x,p.y,unit,t,inv);tops.push(p);});
+  const start=p;const top=drawTier(g,P,tierKey(pid(P),tiers.length+(P.tOff||0)),tiers.length+(P.tOff||0),P.level,P,p.x,p.y,unit,t,inv);
   // joints between sections: a small knot where a rested section ends
   tiers.forEach((tr,i)=>{const st=STEMS[tr.stem]||STEMS.spring;g.fillStyle=st.edge;g.beginPath();g.ellipse(tops[i].x,tops[i].y,unit*0.022,unit*0.014,0,0,7);g.fill();});
   const pot=POTS[P.pot]||POTS.terracotta,wet=tiers.length?0.6:clamp(P.moisture/60,0,1);
@@ -914,9 +914,13 @@ function gardenLayout(){const cv=$('#garden');const W=cv.getBoundingClientRect()
 /* what a plant looks like, as a string: the still picture is only redrawn when this changes */
 function plantSig(p){const now=Date.now();return[p.deco,p.champ?1:0,p.id,p.name,p.level,p.asc,p.leaf,p.flower,p.stem,p.petal,p.pot,p.mut,p.pn,(p.tiers||[]).length,p.clan,clans.has(p.clan)?clans.get(p.clan).name:'',
   Math.round(p.moisture/10),p.flyN||0,p.sp,p.wr,p.pu>now?Math.ceil((p.pu-now)/600000):0,signOf(p),(p.visNow||[]).map(v=>v.t+(v.r?1:0)).join(''),isActive(p)?1:0,names[p.id]||''].join('~');}
-function drawCell(g,p,c,t,C){const{x,y,w:cw,h:ch}=c,gy=y+ch-36;
+const G_SECTIONS=1; /* rested sections shown in the garden; older ones are hidden so tall plants stay a readable size */
+function gardenView(p){const n=(p.tiers||[]).length;if(n<=G_SECTIONS)return p;return Object.assign({},p,{tiers:p.tiers.slice(-G_SECTIONS),tOff:n-G_SECTIONS,hidden:n-G_SECTIONS});}
+function drawCell(g,p0,c,t,C){const p=gardenView(p0);const{x,y,w:cw,h:ch}=c,gy=y+ch-36;
   g.fillStyle=C.soil;g.beginPath();g.ellipse(x+cw/2,gy+2,cw*0.42,9,0,0,7);g.fill();
-  p.signMaxW=cw*0.44;p.signRight=x+cw;drawPlant(g,p,x+cw/2,gy,Math.min(ch*0.66/stackH(p),cw*0.85),t);
+  p.signMaxW=cw*0.44;p.signRight=x+cw;const unit=Math.min(ch*0.66/stackH(p),cw*0.85);drawPlant(g,p,x+cw/2,gy,unit,t);
+  if(p.hidden){const txt=`+${p.hidden} below`;g.font='700 10px Karla, sans-serif';const tw=g.measureText(txt).width+10,px=x+cw/2-unit*0.3*0.5-tw-4,py=gy-unit*0.3*0.6*0.5-7;
+    g.fillStyle='rgba(30,40,30,.55)';g.beginPath();if(g.roundRect)g.roundRect(px,py,tw,15,7);else g.rect(px,py,tw,15);g.fill();g.fillStyle='#fff';g.textAlign='center';g.fillText(txt,px+tw/2,py+11);}
   g.textAlign='center';g.fillStyle=C.ink;g.font='700 13px Karla, sans-serif';g.fillText((p.name||'Plant').slice(0,16),x+cw/2,y+ch-16);
   g.fillStyle=C.muted;g.font='500 12px Karla, sans-serif';g.fillText(`Lv ${p.level}${p.asc?'  ✦'+p.asc:''}`,x+cw/2,y+ch-2);
   if(p.clan&&clans.has(p.clan)){const tag=clans.get(p.clan).name.slice(0,12);g.font='700 11px Karla, sans-serif';const tw=g.measureText(tag).width+12;
@@ -970,7 +974,7 @@ function renderCard(){const card=$('#gcard');if(!selected){card.hidden=true;retu
   if(selected===(myId||'me')){card.innerHTML=`<div class="txt"><b>${esc(state.plantName)}</b><p>This is your plant. Friends can water it, and clan mates can send it helpers once they’ve found some.</p></div>`;return;}
   const p=allPlants().find(x=>x.id===selected);if(!p){card.hidden=true;return;}
   const owner=names[p.id]||'Someone',cd=(state.lastWater[p.id]||0)+WATER_CD-Date.now(),cl=p.clan&&clans.get(p.clan);const mate=state.clan&&p.clan===state.clan;
-  card.innerHTML=`<div class="txt"><b>${esc(p.name)}</b>${p.champ?'<p class="signline">Top of the garden, so it grows in a dung heap.</p>':''}${signOf(p)?`<p class="signline">“${esc(signOf(p))}”</p>`:''}<p>Grown by ${esc(owner)}${cl?` in ${esc(cl.name)}`:''}. Level ${p.level}, ${esc(LEAVES[p.leaf].name.toLowerCase())} leaves${p.asc?`, ascended ${p.asc}×`:''}. Soil ${Math.round(p.moisture)}%${giftList(p)?`, ${giftList(p)}`:''}.${isActive(p)?' <span class="on">● Active now</span>':''}</p>${mate?giftButtons(p.id):''}${flyButton(p.id)}</div>
+  card.innerHTML=`<div class="txt"><b>${esc(p.name)}</b>${p.champ?'<p class="signline">Top of the garden, so it grows in a dung heap.</p>':''}${signOf(p)?`<p class="signline">“${esc(signOf(p))}”</p>`:''}<p>Grown by ${esc(owner)}${cl?` in ${esc(cl.name)}`:''}. Level ${p.level}, ${esc(LEAVES[p.leaf].name.toLowerCase())} leaves${(p.tiers||[]).length?`, ${p.tiers.length+1} sections tall`:''}${p.asc?`, ascended ${p.asc}×`:''}. Soil ${Math.round(p.moisture)}%${giftList(p)?`, ${giftList(p)}`:''}.${isActive(p)?' <span class="on">● Active now</span>':''}</p>${mate?giftButtons(p.id):''}${flyButton(p.id)}</div>
     <div style="display:grid;gap:6px"><button class="buy ${cd<=0?'go':''}" id="waterOther" ${cd>0||!online?'disabled':''}>${cd>0?`Water in ${cdText(cd)}`:'Water it'}</button>${cd>0?'':`<button class="buy" id="peeOther" ${online?'':'disabled'}>Pee on it</button>`}</div>`;buildIcons();}
 function flyButton(id){const cd=(state.lastFly[id]||0)+FLY_CD-Date.now();return`<button class="linkish flybtn" data-fly="${esc(id)}" ${cd>0||!online?'disabled':''}>${cd>0?`Next fly in ${mins(cd)} min`:'Send a fly (−1 sap, just for fun)'}</button>`;}
 async function sendFly(to){if(!online||!to||to===myId||passive)return;const p=players.get(to);if(!p)return;if(Date.now()-(state.lastFly[to]||0)<FLY_CD)return;
